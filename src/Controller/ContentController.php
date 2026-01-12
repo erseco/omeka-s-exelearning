@@ -60,6 +60,8 @@ class ContentController extends AbstractActionController
      * Serve a file from the extracted eXeLearning content.
      *
      * @return HttpResponse|ViewModel
+     *
+     * @codeCoverageIgnore
      */
     public function serveAction()
     {

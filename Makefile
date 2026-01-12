@@ -22,7 +22,7 @@ endif
 
 .PHONY: help check-docker check-bun up upd down pull build lint fix shell clean \
         update-submodule build-editor build-editor-no-update clean-editor \
-        package generate-pot update-po check-untranslated compile-mo i18n test
+        package generate-pot update-po check-untranslated compile-mo i18n test test-coverage
 
 # ============================================================================
 # eXeLearning Editor Build
@@ -111,7 +111,25 @@ fix:
 
 test:
 	@echo "Running unit tests..."
-	"vendor/bin/phpunit" -c test/phpunit.xml
+	@"vendor/bin/phpunit" -c test/phpunit.xml
+
+test-coverage:
+	@echo "Running unit tests with coverage (requires xdebug or pcov)..."
+	@XDEBUG_MODE=coverage "vendor/bin/phpunit" -c test/phpunit.xml --coverage-text 2>&1 | tee /tmp/coverage-output.txt; \
+	COVERAGE=$$(sed 's/\x1b\[[0-9;]*m//g' /tmp/coverage-output.txt | grep -E "Lines:" | head -1 | sed -E 's/.*Lines:[[:space:]]+([0-9]+\.[0-9]+)%.*/\1/'); \
+	echo ""; \
+	echo "Line coverage: $${COVERAGE}%"; \
+	if [ -z "$$COVERAGE" ]; then \
+		echo "Error: Could not parse coverage percentage"; \
+		exit 1; \
+	fi; \
+	COVERAGE_INT=$$(echo "$$COVERAGE" | cut -d. -f1); \
+	if [ "$$COVERAGE_INT" -lt 90 ]; then \
+		echo "Error: Coverage ($${COVERAGE}%) is below minimum threshold (90%)"; \
+		exit 1; \
+	else \
+		echo "Coverage check passed: $${COVERAGE}% >= 90%"; \
+	fi
 
 # ============================================================================
 # Packaging
@@ -210,6 +228,7 @@ help:
 	@echo "  lint                   - Run PHP linter (PHP_CodeSniffer)"
 	@echo "  fix                    - Automatically fix PHP code style issues"
 	@echo "  test                   - Run unit tests with PHPUnit"
+	@echo "  test-coverage          - Run tests with coverage report (requires xdebug/pcov)"
 	@echo ""
 	@echo "Packaging:"
 	@echo "  package VERSION=x.y.z  - Generate a .zip package of the module"

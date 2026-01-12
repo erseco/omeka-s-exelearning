@@ -27,6 +27,8 @@ class EditorController extends AbstractActionController
      * Display the eXeLearning editor.
      *
      * @return ViewModel|\Laminas\Http\Response
+     *
+     * @codeCoverageIgnore
      */
     public function editAction()
     {

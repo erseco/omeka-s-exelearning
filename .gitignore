@@ -4,4 +4,5 @@
 *.zip
 # PHPUnit cache files
 test/.phpunit.result.cache
+test/.phpunit.cache/
 themes/

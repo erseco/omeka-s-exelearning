@@ -50,6 +50,8 @@ class ApiController extends AbstractActionController
      * POST /api/exelearning/save/:id
      *
      * @return JsonModel
+     *
+     * @codeCoverageIgnore
      */
     public function saveAction()
     {

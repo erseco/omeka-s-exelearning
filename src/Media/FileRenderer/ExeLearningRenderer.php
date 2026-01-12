@@ -33,6 +33,8 @@ class ExeLearningRenderer implements RendererInterface
      * @param MediaRepresentation $media
      * @param array $options
      * @return string
+     *
+     * @codeCoverageIgnore
      */
     public function render(PhpRenderer $view, MediaRepresentation $media, array $options = []): string
     {
