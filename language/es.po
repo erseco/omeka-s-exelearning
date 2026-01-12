@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: ThreeDViewer\n"
+"Project-Id-Version: ExeLearning\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-07 22:05+0100\n"
-"PO-Revision-Date: 2023-11-15 12:00+0000\n"
+"POT-Creation-Date: 2026-01-12 16:47+0000\n"
+"PO-Revision-Date: 2026-01-12 17:00+0000\n"
 "Last-Translator: Área de Tecnología Educativa <ate@gobiernodecanarias.org>\n"
 "Language-Team: Spanish\n"
 "Language: es\n"
@@ -12,54 +12,85 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/Media/FileRenderer/Abstract3DRenderer.php:70
-msgid "Use mouse to rotate, zoom and pan"
-msgstr "Usa el ratón para rotar, hacer zoom y desplazar"
+#: test/ExeLearningTest/Controller/EditorControllerTest.php:200
+msgid "Test message"
+msgstr "Mensaje de prueba"
 
-#: src/Form/ConfigForm.php:21
+#: view/exelearning/admin/media-show.phtml:70
+msgid "eXeLearning Preview"
+msgstr "Vista previa de eXeLearning"
+
+#: view/exelearning/admin/media-show.phtml:74
+msgid "Open in new tab"
+msgstr "Abrir en nueva pestaña"
+
+#: view/exelearning/admin/media-show.phtml:78
+msgid "Download .elpx"
+msgstr "Descargar .elpx"
+
+#: view/exelearning/admin/media-show.phtml:84
+#: src/Media/FileRenderer/ExeLearningRenderer.php:111
+msgid "Edit in eXeLearning"
+msgstr "Editar en eXeLearning"
+
+#: view/exelearning/admin/media-show.phtml:101
+msgid "Edit eXeLearning File"
+msgstr "Editar archivo eXeLearning"
+
+#: view/exelearning/admin/media-show.phtml:105
+#: src/Controller/EditorController.php:107
+msgid "Save to Omeka"
+msgstr "Guardar en Omeka"
+
+#: view/exelearning/admin/media-show.phtml:108
+msgid "Close"
+msgstr "Cerrar"
+
+#: view/exelearning/public/item-show.phtml:61
+msgid "Open fullscreen"
+msgstr "Abrir a pantalla completa"
+
+#: view/exelearning/public/item-show.phtml:64
+#: src/Media/FileRenderer/ExeLearningRenderer.php:92
+msgid "Download"
+msgstr "Descargar"
+
+#: src/Controller/EditorController.php:105
+msgid "Saving..."
+msgstr "Guardando..."
+
+#: src/Controller/EditorController.php:106
+msgid "Saved successfully"
+msgstr "Guardado correctamente"
+
+#: src/Controller/EditorController.php:108
+msgid "Loading project..."
+msgstr "Cargando proyecto..."
+
+#: src/Controller/EditorController.php:109
+msgid "Error"
+msgstr "Error"
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:99
+msgid "Fullscreen"
+msgstr "Pantalla completa"
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:164
+msgid "Download eXeLearning file"
+msgstr "Descargar archivo eXeLearning"
+
+#: src/Form/ConfigForm.php:23
 msgid "Viewer Height (px)"
 msgstr "Altura del visor (px)"
 
-#: src/Form/ConfigForm.php:22
-msgid "Default height for the 3D viewer in pixels."
-msgstr "Altura predeterminada del visor 3D en píxeles."
+#: src/Form/ConfigForm.php:24
+msgid "Default height for the eXeLearning content viewer in pixels."
+msgstr "Altura predeterminada del visor de contenido eXeLearning en píxeles."
 
-#: src/Form/ConfigForm.php:36
-msgid "Auto-rotate models"
-msgstr "Rotar modelos automáticamente"
+#: src/Form/ConfigForm.php:38
+msgid "Show Edit Button"
+msgstr "Mostrar botón de edición"
 
-#: src/Form/ConfigForm.php:37
-msgid "Enable auto-rotation for 3D models."
-msgstr "Habilitar rotación automática para modelos 3D."
-
-#: src/Form/ConfigForm.php:48
-#, fuzzy
-msgid "Foreground Color"
-msgstr "Color de objeto"
-
-#: src/Form/ConfigForm.php:49
-#, fuzzy
-msgid "Choose the foreground color for 3D viewers."
-msgstr "Elija el color de objeto para los visores 3D."
-
-#: src/Form/ConfigForm.php:60
-msgid "Background Color"
-msgstr "Color de fondo"
-
-#: src/Form/ConfigForm.php:61
-msgid "Choose the background color for 3D viewers."
-msgstr "Elija el color de fondo para los visores 3D."
-
-#: src/Form/ConfigForm.php:72
-msgid "Show Grid"
-msgstr "Mostrar rejilla"
-
-#: src/Form/ConfigForm.php:73
-msgid "Display a green grid to help with size perception."
-msgstr "Mostrar una rejilla verde para ayudar con la percepción del tamaño."
-
-#~ msgid "GLB Viewer"
-#~ msgstr "Visor GLB"
-
-#~ msgid "STL Viewer"
-#~ msgstr "Visor STL"
+#: src/Form/ConfigForm.php:39
+msgid "Display the \"Edit in eXeLearning\" button for users with edit permissions."
+msgstr "Mostrar el botón \"Editar en eXeLearning\" para usuarios con permisos de edición."

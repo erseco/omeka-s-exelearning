@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-07 23:02+0100\n"
+"POT-Creation-Date: 2026-01-12 16:47+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,46 +17,86 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/Media/FileRenderer/Abstract3DRenderer.php:70
-msgid "Use mouse to rotate, zoom and pan"
+#: test/ExeLearningTest/Controller/EditorControllerTest.php:200
+msgid "Test message"
 msgstr ""
 
-#: src/Form/ConfigForm.php:21
+#: view/exelearning/admin/media-show.phtml:70
+msgid "eXeLearning Preview"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:74
+msgid "Open in new tab"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:78
+msgid "Download .elpx"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:84
+#: src/Media/FileRenderer/ExeLearningRenderer.php:111
+msgid "Edit in eXeLearning"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:101
+msgid "Edit eXeLearning File"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:105
+#: src/Controller/EditorController.php:107
+msgid "Save to Omeka"
+msgstr ""
+
+#: view/exelearning/admin/media-show.phtml:108
+msgid "Close"
+msgstr ""
+
+#: view/exelearning/public/item-show.phtml:61
+msgid "Open fullscreen"
+msgstr ""
+
+#: view/exelearning/public/item-show.phtml:64
+#: src/Media/FileRenderer/ExeLearningRenderer.php:92
+msgid "Download"
+msgstr ""
+
+#: src/Controller/EditorController.php:105
+msgid "Saving..."
+msgstr ""
+
+#: src/Controller/EditorController.php:106
+msgid "Saved successfully"
+msgstr ""
+
+#: src/Controller/EditorController.php:108
+msgid "Loading project..."
+msgstr ""
+
+#: src/Controller/EditorController.php:109
+msgid "Error"
+msgstr ""
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:99
+msgid "Fullscreen"
+msgstr ""
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:164
+msgid "Download eXeLearning file"
+msgstr ""
+
+#: src/Form/ConfigForm.php:23
 msgid "Viewer Height (px)"
 msgstr ""
 
-#: src/Form/ConfigForm.php:22
-msgid "Default height for the 3D viewer in pixels."
+#: src/Form/ConfigForm.php:24
+msgid "Default height for the eXeLearning content viewer in pixels."
 msgstr ""
 
-#: src/Form/ConfigForm.php:36
-msgid "Auto-rotate models"
+#: src/Form/ConfigForm.php:38
+msgid "Show Edit Button"
 msgstr ""
 
-#: src/Form/ConfigForm.php:37
-msgid "Enable auto-rotation for 3D models."
-msgstr ""
-
-#: src/Form/ConfigForm.php:48
-msgid "Foreground Color"
-msgstr ""
-
-#: src/Form/ConfigForm.php:49
-msgid "Choose the foreground color for 3D viewers."
-msgstr ""
-
-#: src/Form/ConfigForm.php:60
-msgid "Background Color"
-msgstr ""
-
-#: src/Form/ConfigForm.php:61
-msgid "Choose the background color for 3D viewers."
-msgstr ""
-
-#: src/Form/ConfigForm.php:72
-msgid "Show Grid"
-msgstr ""
-
-#: src/Form/ConfigForm.php:73
-msgid "Display a green grid to help with size perception."
+#: src/Form/ConfigForm.php:39
+msgid ""
+"Display the \"Edit in eXeLearning\" button for users with edit permissions."
 msgstr ""
