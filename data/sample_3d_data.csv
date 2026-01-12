@@ -1,0 +1,5 @@
+title,creator,description,media_url
+Duck glTF,Khronos,Sample GLB model,https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb
+Avocado glTF,Khronos,Sample GLB model,https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF-Binary/Avocado.glb
+BoomBox glTF,Khronos,Sample GLB model,https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoomBox/glTF-Binary/BoomBox.glb
+AT&T Building,Stephen Yeargin,3D STL model of the AT&T Building (550 Madison Avenue) in New York City,https://raw.githubusercontent.com/stephenyeargin/stl-files/main/AT%26T%20Building.stl

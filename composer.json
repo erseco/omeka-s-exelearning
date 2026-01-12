@@ -1,0 +1,60 @@
+{
+    "name": "ateeducacion/omeka-s-exelearning",
+    "description": "Upload, view and edit eXeLearning content (.elpx files) in Omeka S",
+    "type": "omeka-s-module",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Área de Tecnología Educativa",
+            "email": "ate.educacion@gobiernodecanarias.org"
+        }
+    ],
+    "homepage": "https://github.com/ateeducacion/omeka-s-exelearning",
+    "support": {
+        "issues": "https://github.com/ateeducacion/omeka-s-exelearning/issues"
+    },
+    "keywords": [
+        "Omeka S",
+        "module",
+        "eXeLearning",
+        "elpx",
+        "educational content"
+    ],
+    "require": {
+        "php": ">=7.4",
+        "ext-zip": "*"
+    },
+    "config": {
+        "platform": {
+            "php": "7.4"
+        },
+        "allow-plugins": {
+            "omeka/composer-addon-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require-dev": {
+        "squizlabs/php_codesniffer": "*",
+        "phpunit/phpunit": "*",
+        "zerocrates/extract-tagged-strings": "dev-master",
+        "laminas/laminas-form": "^3.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "ExeLearning\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ExeLearningTest\\": "test/",
+            "Omeka\\": "test/Stubs/Omeka/"
+        }
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/zerocrates/extract-tagged-strings.git"
+        }
+    ]
+}

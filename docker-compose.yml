@@ -1,0 +1,81 @@
+services:
+
+  omekas:
+    image: erseco/alpine-omeka-s:develop
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      DB_HOST: mariadb
+      DB_NAME: omeka
+      DB_USER: omeka
+      DB_PASSWORD: omeka
+      DB_PORT: 3306
+
+      # Admin + site
+      OMEKA_ADMIN_EMAIL: admin@example.com
+      OMEKA_ADMIN_NAME: "Site Administrator"
+      OMEKA_ADMIN_PASSWORD: PLEASE_CHANGEME
+      OMEKA_SITE_TITLE: "Omeka S Sample Site"
+      # Auto-import sample data CSV on first boot (requires CSVImport module)
+      OMEKA_CSV_IMPORT_FILE: /data/sample_data.csv
+      # App environment and base URL
+      APPLICATION_ENV: development
+      SITE_URL: http://localhost:8080
+      OPCACHE_ENABLE: 0
+
+      # Minimal themes/modules set (names or URLs supported)
+      OMEKA_THEMES: "default"
+      OMEKA_MODULES: |
+        Common
+        EasyAdmin
+        Adminer
+        Log
+
+      # Hooks to finish configuration on first boot
+      PRE_CONFIGURE_COMMANDS: |
+        echo 'Pre-configure hook'
+      POST_CONFIGURE_COMMANDS: |
+        echo 'Post-configure: ensure editor user and enable modules'
+
+        # Create an Editor user if missing
+        if ! omeka-s-cli user:list --json | jq -e '.[] | select(.email == "editor@example.com")' >/dev/null; then
+          echo "Creating user editor@example.com with role editor..."
+          omeka-s-cli user:add "editor@example.com" "Editor" editor "1234"
+        else
+          echo "User editor@example.com already exists. Skipping."
+        fi
+
+        # Enable the ExeLearning module from local source
+        omeka-s-cli module:install ExeLearning
+
+        # Ensure CSVImport is installed (in case auto-install didn't yet)
+        omeka-s-cli module:install CSVImport || true
+
+    volumes:
+      - omekas_data:/var/www/html/volume:Z
+      - ./:/var/www/html/volume/modules/ExeLearning
+      - ./data:/data:ro
+
+  mariadb:
+    image: mariadb:latest
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: omeka
+      MYSQL_DATABASE: omeka
+      MYSQL_USER: omeka
+      MYSQL_PASSWORD: omeka
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-homariadb", "-uomeka", "-pomeka"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mariadb_data:
+  omekas_data:

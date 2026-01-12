@@ -1,0 +1,247 @@
+/**
+ * eXeLearning Module Styles
+ */
+
+/* ==========================================================================
+   Viewer Container
+   ========================================================================== */
+
+.exelearning-viewer {
+    position: relative;
+    width: 100%;
+    margin-bottom: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f5f5f5;
+}
+
+/* ==========================================================================
+   Toolbar
+   ========================================================================== */
+
+.exelearning-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+}
+
+.exelearning-title {
+    font-weight: 500;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 50%;
+}
+
+.exelearning-toolbar-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.exelearning-toolbar-actions .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    text-decoration: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.exelearning-download-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+}
+
+.exelearning-download-btn:hover {
+    background: #5a6268;
+    color: white;
+}
+
+.exelearning-fullscreen-btn {
+    background: #17a2b8;
+    color: white;
+    border: none;
+}
+
+.exelearning-fullscreen-btn:hover {
+    background: #138496;
+}
+
+.exelearning-edit-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+}
+
+.exelearning-edit-btn:hover {
+    background: #218838;
+    color: white;
+}
+
+/* ==========================================================================
+   Iframe
+   ========================================================================== */
+
+.exelearning-iframe {
+    display: block;
+    width: 100%;
+    border: none;
+    background: white;
+}
+
+.exelearning-iframe:fullscreen {
+    width: 100vw;
+    height: 100vh;
+}
+
+.exelearning-iframe:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+}
+
+.exelearning-iframe:-moz-full-screen {
+    width: 100vw;
+    height: 100vh;
+}
+
+.exelearning-iframe:-ms-fullscreen {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* ==========================================================================
+   Fallback (no preview)
+   ========================================================================== */
+
+.exelearning-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.exelearning-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    background: #6c757d;
+    border-radius: 8px;
+    position: relative;
+}
+
+.exelearning-icon::before {
+    content: "EXE";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.exelearning-filename {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: #666;
+    word-break: break-all;
+}
+
+/* ==========================================================================
+   Icons
+   ========================================================================== */
+
+.icon-download::before,
+.icon-fullscreen::before,
+.icon-fullscreen-exit::before,
+.icon-edit::before {
+    font-family: inherit;
+    font-weight: normal;
+}
+
+.icon-download::before {
+    content: "↓";
+}
+
+.icon-fullscreen::before {
+    content: "⛶";
+}
+
+.icon-fullscreen-exit::before {
+    content: "⛶";
+}
+
+.icon-edit::before {
+    content: "✎";
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 600px) {
+    .exelearning-toolbar {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .exelearning-title {
+        max-width: 100%;
+    }
+
+    .exelearning-toolbar-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+/* ==========================================================================
+   Notifications (for editor)
+   ========================================================================== */
+
+.omeka-exe-notification {
+    position: fixed;
+    top: 60px;
+    right: 10px;
+    z-index: 10001;
+    padding: 12px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.3s ease;
+}
+
+.omeka-exe-notification--success {
+    background: #28a745;
+    color: white;
+}
+
+.omeka-exe-notification--error {
+    background: #dc3545;
+    color: white;
+}
+
+.omeka-exe-notification--info {
+    background: #17a2b8;
+    color: white;
+}
+
+.omeka-exe-notification--fade {
+    opacity: 0;
+}

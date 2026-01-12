@@ -1,0 +1,173 @@
+<?php
+/**
+ * eXeLearning Editor Bootstrap Template
+ *
+ * Loads the static PWA version of eXeLearning editor with Omeka S integration.
+ * The static editor is built with `make build-editor` and placed in dist/static/.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \Omeka\Api\Representation\MediaRepresentation $media
+ * @var array $config
+ * @var string $editorBaseUrl
+ */
+
+// Check if static editor exists
+$staticIndex = dirname(__DIR__, 2) . '/dist/static/index.html';
+if (!file_exists($staticIndex)) {
+    echo '<h1>Error</h1>';
+    echo '<p>eXeLearning static editor not found.</p>';
+    echo '<p>Please run <code>make build-editor</code> in the module directory.</p>';
+    return;
+}
+
+// Load the static index.html
+$template = file_get_contents($staticIndex);
+
+if (empty($template)) {
+    echo '<h1>Error</h1>';
+    echo '<p>Failed to load eXeLearning editor template.</p>';
+    return;
+}
+
+// Prepare JSON-safe configuration
+$configJson = json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+$i18nJson = json_encode($config['i18n'], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+
+// Build the configuration script
+$configScript = <<<SCRIPT
+    <!-- Omeka S Integration Configuration -->
+    <script>
+        // Omeka S Integration Configuration
+        window.__OMEKA_EXE_CONFIG__ = {$configJson};
+
+        // Override static mode detection for Omeka S
+        window.__EXE_STATIC_MODE__ = true;
+        window.__EXE_OMEKA_MODE__ = true;
+
+        // Disable Service Worker in Omeka mode to prevent path conflicts
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register = function() {
+                console.log("[Omeka Mode] Service worker registration disabled");
+                return Promise.resolve({ scope: "" });
+            };
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                registrations.forEach(function(registration) {
+                    registration.unregister();
+                    console.log("[Omeka Mode] Service worker unregistered");
+                });
+            });
+        }
+
+        // Handle CSS/JS 404 errors gracefully
+        (function() {
+            var originalFetch = window.fetch;
+            window.fetch = function(input, init) {
+                var url = typeof input === "string" ? input : (input && input.url) || "";
+                return originalFetch.apply(this, arguments).then(function(response) {
+                    if (!response.ok && (url.includes(".css") || url.includes("idevices"))) {
+                        console.warn("[Omeka Mode] Fetch 404 fallback:", url);
+                        return new Response("/* empty fallback */", {
+                            status: 200,
+                            headers: { "Content-Type": "text/css" }
+                        });
+                    }
+                    return response;
+                }).catch(function(error) {
+                    if (url.includes(".css") || url.includes("idevices")) {
+                        console.warn("[Omeka Mode] Fetch error fallback:", url);
+                        return new Response("/* empty fallback */", {
+                            status: 200,
+                            headers: { "Content-Type": "text/css" }
+                        });
+                    }
+                    throw error;
+                });
+            };
+        })();
+    </script>
+SCRIPT;
+
+// Get the correct module base URL for assets (without dist/static)
+$moduleBaseUrl = dirname(dirname($editorBaseUrl));
+$bridgeScript = '<script src="' . $moduleBaseUrl . '/asset/js/omeka-exe-bridge.js"></script>';
+
+// Omeka-specific styles
+$omekaStyles = <<<STYLES
+    <!-- Omeka-specific styles -->
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Omeka notification */
+        .omeka-exe-notification {
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            z-index: 10001;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: opacity 0.3s ease;
+        }
+        .omeka-exe-notification--success {
+            background: #4caf50;
+            color: white;
+        }
+        .omeka-exe-notification--error {
+            background: #f44336;
+            color: white;
+        }
+        .omeka-exe-notification--fade {
+            opacity: 0;
+        }
+
+        /* Hide menu items not needed in Omeka */
+        .menu-file-new,
+        .menu-file-open,
+        .menu-file-save,
+        .menu-file-save-as,
+        .menu-cloud-storage,
+        [data-action="newProject"],
+        [data-action="openUserOdeFiles"],
+        [data-action="save"],
+        [data-action="saveAs"],
+        [data-action="uploadToDrive"],
+        [data-action="uploadToDropbox"] {
+            display: none !important;
+        }
+
+        /* Hide eXeLearning built-in Save button in the header */
+        #head-top-save-button {
+            display: none !important;
+        }
+    </style>
+STYLES;
+
+// Insert configuration, bridge script, and styles before </head>
+$template = str_replace('</head>', $configScript . $bridgeScript . $omekaStyles . '</head>', $template);
+
+// Add <base> tag to set base URL for relative paths
+$baseTag = '<base href="' . htmlspecialchars($editorBaseUrl, ENT_QUOTES, 'UTF-8') . '/">';
+$template = preg_replace('/(<head[^>]*>)/i', '$1' . $baseTag, $template);
+
+// Fix relative paths starting with "./"
+$template = preg_replace(
+    '/(?<=["\'])\.\//',
+    htmlspecialchars($editorBaseUrl, ENT_QUOTES, 'UTF-8') . '/',
+    $template
+);
+
+// Output headers
+if (!headers_sent()) {
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+}
+
+// Output the processed template
+echo $template;
