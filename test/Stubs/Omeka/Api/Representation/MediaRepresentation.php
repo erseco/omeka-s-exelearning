@@ -13,13 +13,23 @@ class MediaRepresentation
     private string $displayTitle;
     private string $filename;
     private int $id;
+    private array $mediaData;
+    private ?object $item;
 
-    public function __construct(string $originalUrl, string $displayTitle, string $filename, int $id = 1)
-    {
+    public function __construct(
+        string $originalUrl,
+        string $displayTitle,
+        string $filename,
+        int $id = 1,
+        array $mediaData = [],
+        ?object $item = null
+    ) {
         $this->originalUrl = $originalUrl;
         $this->displayTitle = $displayTitle;
         $this->filename = $filename;
         $this->id = $id;
+        $this->mediaData = $mediaData;
+        $this->item = $item;
     }
 
     public function originalUrl(): string
@@ -40,5 +50,15 @@ class MediaRepresentation
     public function id(): int
     {
         return $this->id;
+    }
+
+    public function mediaData(): array
+    {
+        return $this->mediaData;
+    }
+
+    public function item(): ?object
+    {
+        return $this->item;
     }
 }

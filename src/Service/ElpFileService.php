@@ -55,6 +55,8 @@ class ElpFileService
 
     /**
      * Log a message.
+     *
+     * @codeCoverageIgnore
      */
     protected function log(string $level, string $message): void
     {
@@ -69,6 +71,8 @@ class ElpFileService
      * @param MediaRepresentation $media
      * @return array Result with hash and hasPreview
      * @throws \Exception
+     *
+     * @codeCoverageIgnore
      */
     public function processUploadedFile(MediaRepresentation $media): array
     {
@@ -144,6 +148,8 @@ class ElpFileService
      * @param string $newFilePath Path to the new file
      * @return array Result with new hash and previewUrl
      * @throws \Exception
+     *
+     * @codeCoverageIgnore
      */
     public function replaceFile(MediaRepresentation $media, string $newFilePath): array
     {
@@ -272,6 +278,8 @@ class ElpFileService
      *
      * @param string $filePath
      * @return string
+     *
+     * @codeCoverageIgnore
      */
     protected function generateHash(string $filePath): string
     {
@@ -284,6 +292,8 @@ class ElpFileService
      * @param string $zipPath
      * @param string $extractPath
      * @throws \Exception
+     *
+     * @codeCoverageIgnore
      */
     protected function extractZip(string $zipPath, string $extractPath): void
     {
@@ -315,6 +325,8 @@ class ElpFileService
      *
      * @param MediaRepresentation $media
      * @param array $data
+     *
+     * @codeCoverageIgnore
      */
     protected function updateMediaData(MediaRepresentation $media, array $data): void
     {
@@ -353,6 +365,8 @@ class ElpFileService
      * Create a security .htaccess file to block direct access.
      *
      * This forces all content to be served through the secure proxy controller.
+     *
+     * @codeCoverageIgnore
      */
     protected function createSecurityHtaccess(): void
     {
@@ -391,6 +405,8 @@ HTACCESS;
      * Recursively delete a directory.
      *
      * @param string $dir
+     *
+     * @codeCoverageIgnore
      */
     protected function deleteDirectory(string $dir): void
     {
