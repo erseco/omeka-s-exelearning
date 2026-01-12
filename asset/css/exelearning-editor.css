@@ -1,0 +1,109 @@
+/**
+ * eXeLearning Editor Modal Styles for Omeka S
+ */
+
+:root {
+    --exe-primary: #2271b1;
+    --exe-primary-hover: #135e96;
+    --exe-modal-bg: #1d2327;
+    --exe-header-bg: #23282d;
+    --exe-text-light: #fff;
+    --exe-accent: #72aee6;
+}
+
+/* Fullscreen Modal */
+.exelearning-editor-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000000;
+    background: #1d2327;
+    display: none;
+    flex-direction: column;
+}
+
+/* Modal Header */
+.exelearning-editor-header {
+    height: 50px;
+    min-height: 50px;
+    background: #23282d;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid #1d2327;
+    box-sizing: border-box;
+}
+
+.exelearning-editor-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.exelearning-editor-title .icon {
+    color: #72aee6;
+    font-size: 20px;
+}
+
+.exelearning-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.exelearning-editor-actions .button {
+    height: 32px;
+    line-height: 30px;
+    padding: 0 15px;
+    border-radius: 3px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid;
+}
+
+.exelearning-editor-actions .button-primary {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+
+.exelearning-editor-actions .button-primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+}
+
+.exelearning-editor-actions .button-primary:disabled {
+    background: #a0a5aa;
+    border-color: #a0a5aa;
+    cursor: not-allowed;
+}
+
+.exelearning-editor-actions .button-secondary {
+    background: #f6f7f7;
+    border-color: #c3c4c7;
+    color: #1d2327;
+}
+
+.exelearning-editor-actions .button-secondary:hover {
+    background: #f0f0f1;
+    border-color: #8c8f94;
+}
+
+/* Iframe */
+.exelearning-editor-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #fff;
+}
+
+/* Body class when editor is open */
+body.exelearning-editor-open {
+    overflow: hidden;
+}

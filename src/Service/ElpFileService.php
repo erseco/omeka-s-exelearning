@@ -96,8 +96,14 @@ class ElpFileService
                 $this->log('err', sprintf('Failed to create base path: %s - Error: %s', $this->basePath, $error['message'] ?? 'unknown'));
                 throw new \Exception('Failed to create base directory: ' . $this->basePath);
             }
+            // Create security .htaccess to prevent direct access
+            $this->createSecurityHtaccess();
         } else {
             $this->log('info', sprintf('Base path already exists: %s, writable: %s', $this->basePath, is_writable($this->basePath) ? 'yes' : 'no'));
+            // Ensure .htaccess exists even if directory already exists
+            if (!file_exists($this->basePath . '/.htaccess')) {
+                $this->createSecurityHtaccess();
+            }
         }
 
         // Extract to data directory
@@ -246,7 +252,7 @@ class ElpFileService
             return null;
         }
 
-        return rtrim($baseUrl, '/') . '/modules/ExeLearning/data/exelearning/' . $hash . '/index.html';
+        return rtrim($baseUrl, '/') . '/files/exelearning/' . $hash . '/index.html';
     }
 
     /**
@@ -341,6 +347,44 @@ class ElpFileService
         $this->entityManager->refresh($mediaEntity);
         $verifyData = $mediaEntity->getData();
         $this->log('info', sprintf('Verified data after flush: %s', json_encode($verifyData)));
+    }
+
+    /**
+     * Create a security .htaccess file to block direct access.
+     *
+     * This forces all content to be served through the secure proxy controller.
+     */
+    protected function createSecurityHtaccess(): void
+    {
+        $htaccessPath = $this->basePath . '/.htaccess';
+        $htaccessContent = <<<'HTACCESS'
+# Security: Block direct access to eXeLearning extracted content
+# All content must be served through the secure proxy controller
+# which adds proper security headers (CSP, X-Frame-Options, etc.)
+
+# Deny all direct access
+<IfModule mod_authz_core.c>
+    # Apache 2.4+
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    # Apache 2.2
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+# Alternative: return 403 for all requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^ - [F,L]
+</IfModule>
+HTACCESS;
+
+        if (@file_put_contents($htaccessPath, $htaccessContent) === false) {
+            $this->log('warn', 'Failed to create .htaccess security file');
+        } else {
+            $this->log('info', 'Created .htaccess security file');
+        }
     }
 
     /**

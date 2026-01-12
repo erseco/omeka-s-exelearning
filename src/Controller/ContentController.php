@@ -1,0 +1,228 @@
+<?php
+declare(strict_types=1);
+
+namespace ExeLearning\Controller;
+
+use Laminas\Mvc\Controller\AbstractActionController;
+use Laminas\Http\Response as HttpResponse;
+
+/**
+ * Secure content delivery controller for eXeLearning files.
+ *
+ * Serves extracted eXeLearning content with security headers to prevent:
+ * - XSS attacks via malicious content
+ * - Clickjacking
+ * - Data exfiltration
+ */
+class ContentController extends AbstractActionController
+{
+    /** @var string */
+    protected $basePath;
+
+    /** @var array MIME types for common file extensions */
+    protected $mimeTypes = [
+        'html' => 'text/html',
+        'htm' => 'text/html',
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'json' => 'application/json',
+        'xml' => 'application/xml',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'svg' => 'image/svg+xml',
+        'webp' => 'image/webp',
+        'ico' => 'image/x-icon',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'eot' => 'application/vnd.ms-fontobject',
+        'mp3' => 'audio/mpeg',
+        'mp4' => 'video/mp4',
+        'webm' => 'video/webm',
+        'ogg' => 'audio/ogg',
+        'ogv' => 'video/ogg',
+        'pdf' => 'application/pdf',
+        'zip' => 'application/zip',
+        'txt' => 'text/plain',
+    ];
+
+    /**
+     * @param string $basePath Path to the exelearning files directory
+     */
+    public function __construct(string $basePath)
+    {
+        $this->basePath = $basePath;
+    }
+
+    /**
+     * Serve a file from the extracted eXeLearning content.
+     *
+     * @return HttpResponse|ViewModel
+     */
+    public function serveAction()
+    {
+        $hash = $this->params()->fromRoute('hash');
+        $file = $this->params()->fromRoute('file');
+
+        // Validate hash format (SHA1 = 40 hex characters)
+        if (!$hash || !preg_match('/^[a-f0-9]{40}$/i', $hash)) {
+            return $this->notFound('Invalid content identifier');
+        }
+
+        // Validate and sanitize file path
+        if (!$file) {
+            $file = 'index.html';
+        }
+
+        // Prevent directory traversal attacks
+        $file = $this->sanitizePath($file);
+        if ($file === null) {
+            return $this->notFound('Invalid file path');
+        }
+
+        // Build full file path
+        $fullPath = $this->basePath . '/' . $hash . '/' . $file;
+
+        // Check file exists
+        if (!file_exists($fullPath) || !is_file($fullPath)) {
+            return $this->notFound('File not found');
+        }
+
+        // Check file is within the expected directory (double-check against symlinks)
+        $realPath = realpath($fullPath);
+        $realBasePath = realpath($this->basePath . '/' . $hash);
+        if ($realPath === false || $realBasePath === false ||
+            strpos($realPath, $realBasePath) !== 0) {
+            return $this->notFound('Access denied');
+        }
+
+        // Get file info
+        $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $mimeType = $this->mimeTypes[$extension] ?? 'application/octet-stream';
+        $fileSize = filesize($fullPath);
+
+        // Create response
+        $response = new HttpResponse();
+        $response->setStatusCode(200);
+
+        // Set content headers
+        $headers = $response->getHeaders();
+        $headers->addHeaderLine('Content-Type', $mimeType);
+        $headers->addHeaderLine('Content-Length', $fileSize);
+
+        // Security headers
+        $this->addSecurityHeaders($headers, $mimeType);
+
+        // Cache headers (content is static)
+        $headers->addHeaderLine('Cache-Control', 'public, max-age=3600');
+
+        // Read and return file content
+        $content = file_get_contents($fullPath);
+        $response->setContent($content);
+
+        return $response;
+    }
+
+    /**
+     * Add security headers based on content type.
+     *
+     * @param \Laminas\Http\Headers $headers
+     * @param string $mimeType
+     */
+    protected function addSecurityHeaders($headers, string $mimeType): void
+    {
+        // Prevent clickjacking - only allow embedding from same origin
+        $headers->addHeaderLine('X-Frame-Options', 'SAMEORIGIN');
+
+        // Prevent MIME type sniffing
+        $headers->addHeaderLine('X-Content-Type-Options', 'nosniff');
+
+        // For HTML content, add strict Content-Security-Policy
+        if (strpos($mimeType, 'text/html') !== false) {
+            // CSP that:
+            // - Allows inline styles and scripts (needed for eXeLearning content)
+            // - Restricts where content can be loaded from
+            // - Prevents the content from framing other sites
+            // - Allows images/media from same origin and data URIs
+            $csp = implode('; ', [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob:",
+                "media-src 'self' data: blob:",
+                "font-src 'self' data:",
+                "connect-src 'self'",
+                "frame-src 'self'",
+                "frame-ancestors 'self'",
+                "form-action 'none'",
+                "base-uri 'self'",
+            ]);
+            $headers->addHeaderLine('Content-Security-Policy', $csp);
+
+            // Referrer policy - don't leak info to external sites
+            $headers->addHeaderLine('Referrer-Policy', 'same-origin');
+
+            // Permissions policy - disable dangerous features
+            $headers->addHeaderLine(
+                'Permissions-Policy',
+                'geolocation=(), microphone=(), camera=(), payment=()'
+            );
+        }
+    }
+
+    /**
+     * Sanitize file path to prevent directory traversal.
+     *
+     * @param string $path
+     * @return string|null Sanitized path or null if invalid
+     */
+    protected function sanitizePath(string $path): ?string
+    {
+        // Decode URL encoding
+        $path = urldecode($path);
+
+        // Remove null bytes
+        $path = str_replace("\0", '', $path);
+
+        // Normalize slashes
+        $path = str_replace('\\', '/', $path);
+
+        // Remove any ../ or ./ sequences
+        $parts = explode('/', $path);
+        $safeParts = [];
+
+        foreach ($parts as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+            if ($part === '..') {
+                // Reject any attempt to go up directories
+                return null;
+            }
+            $safeParts[] = $part;
+        }
+
+        if (empty($safeParts)) {
+            return 'index.html';
+        }
+
+        return implode('/', $safeParts);
+    }
+
+    /**
+     * Return a 404 response.
+     *
+     * @param string $message
+     * @return HttpResponse
+     */
+    protected function notFound(string $message = 'Not found'): HttpResponse
+    {
+        $response = new HttpResponse();
+        $response->setStatusCode(404);
+        $response->getHeaders()->addHeaderLine('Content-Type', 'text/plain');
+        $response->setContent($message);
+        return $response;
+    }
+}

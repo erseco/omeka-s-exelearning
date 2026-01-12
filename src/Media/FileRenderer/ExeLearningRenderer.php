@@ -64,8 +64,8 @@ class ExeLearningRenderer implements RendererInterface
         // Get configuration
         $config = $this->getConfig($view);
 
-        // Build preview URL
-        $previewUrl = $view->basePath() . '/modules/ExeLearning/data/exelearning/' . $hash . '/index.html';
+        // Build secure preview URL via proxy controller
+        $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
 
         // Load assets
         $view->headLink()->appendStylesheet(
@@ -113,12 +113,22 @@ class ExeLearningRenderer implements RendererInterface
         $html .= '</div>'; // toolbar-actions
         $html .= '</div>'; // toolbar
 
-        // Iframe
+        // Iframe with security sandbox
+        // sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" prevents:
+        // - Access to parent page DOM
+        // - Access to cookies/localStorage from parent origin
+        // - Form submissions to external sites
+        // - Running plugins
+        // While allowing:
+        // - JavaScript execution (needed for eXeLearning interactivity)
+        // - Opening popups for external links
         $html .= '<iframe ';
         $html .= 'id="exelearning-iframe-' . $media->id() . '" ';
         $html .= 'src="' . $view->escapeHtmlAttr($previewUrl) . '" ';
         $html .= 'class="exelearning-iframe" ';
         $html .= 'style="width: 100%; height: ' . (int) $config['height'] . 'px; border: none;" ';
+        $html .= 'sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" ';
+        $html .= 'referrerpolicy="no-referrer" ';
         $html .= 'allowfullscreen>';
         $html .= '</iframe>';
 

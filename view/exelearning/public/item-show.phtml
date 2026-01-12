@@ -1,0 +1,73 @@
+<?php
+/**
+ * Public item show partial - displays eXeLearning content in an iframe.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \Omeka\Api\Representation\MediaRepresentation $media
+ * @var string $previewUrl
+ */
+?>
+
+<style>
+.exelearning-public-viewer {
+    margin: 2rem 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+}
+.exelearning-public-viewer .viewer-header {
+    padding: 0.75rem 1rem;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.exelearning-public-viewer .viewer-title {
+    font-weight: 600;
+    margin: 0;
+}
+.exelearning-public-viewer .viewer-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.exelearning-public-viewer .viewer-actions a {
+    padding: 0.4rem 0.8rem;
+    background: #0073aa;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+.exelearning-public-viewer .viewer-actions a:hover {
+    background: #005a87;
+}
+.exelearning-public-viewer iframe {
+    display: block;
+    width: 100%;
+    height: 700px;
+    border: none;
+}
+</style>
+
+<div class="exelearning-public-viewer">
+    <div class="viewer-header">
+        <h3 class="viewer-title"><?= $this->escapeHtml($media->displayTitle()) ?></h3>
+        <div class="viewer-actions">
+            <a href="<?= $this->escapeHtmlAttr($previewUrl) ?>" target="_blank">
+                <?= $this->translate('Open fullscreen') ?>
+            </a>
+            <a href="<?= $this->escapeHtmlAttr($media->originalUrl()) ?>" download>
+                <?= $this->translate('Download') ?>
+            </a>
+        </div>
+    </div>
+    <iframe
+        src="<?= $this->escapeHtmlAttr($previewUrl) ?>"
+        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+        referrerpolicy="no-referrer"
+        allowfullscreen></iframe>
+</div>

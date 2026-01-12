@@ -11,8 +11,8 @@
  * @var string $editorBaseUrl
  */
 
-// Check if static editor exists
-$staticIndex = dirname(__DIR__, 2) . '/dist/static/index.html';
+// Check if static editor exists (symlinked from asset/static -> dist/static)
+$staticIndex = dirname(__DIR__, 2) . '/asset/static/index.html';
 if (!file_exists($staticIndex)) {
     echo '<h1>Error</h1>';
     echo '<p>eXeLearning static editor not found.</p>';

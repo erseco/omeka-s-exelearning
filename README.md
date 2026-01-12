@@ -1,47 +1,103 @@
-# ThreeDViewer (3D) Module for Omeka S
+# ExeLearning Module for Omeka S
 
-![Screenshot of the 3D Viewer](https://raw.githubusercontent.com/ateeducacion/omeka-s-ThreeDViewer/refs/heads/main/.github/assets/screenshot.png)
-
-This module allows users to view and interact with 3D models (STL and GLB files) directly within Omeka S.
+This module allows users to view and edit eXeLearning (.elpx) files directly within Omeka S.
 
 ## Features
 
-- View 3D models (STL and GLB formats) directly in the browser
-- Interactive controls for rotating, zooming, and panning 3D models
-- Customizable display options including background color
-- Optional auto-rotation for better visualization
-- Grid display option for better spatial reference
-- Toggle between the original Three.js/model-viewer pipeline and an experimental Babylon.js renderer
-- Babylon.js renderer with configurable cameras, lighting, and WebXR support
+- **View eXeLearning content**: Display interactive educational content in an embedded viewer
+- **Edit in browser**: Edit .elpx files using the eXeLearning editor without leaving Omeka S
+- **Automatic thumbnails**: Generates visual thumbnails from the content's first page
+- **Secure content delivery**: All content is served through a secure proxy with CSP headers
+
+## How It Works
+
+### Viewing Content
+
+When you upload an .elpx file to Omeka S:
+
+1. The module extracts the contents to a secure directory
+2. An interactive preview is displayed in an iframe
+3. Users can open the content in a new tab or download the original file
+
+### Editing Content
+
+The module provides an "Edit in eXeLearning" button for administrators:
+
+1. Click the button to open the full-screen editor modal
+2. Make your changes using the familiar eXeLearning interface
+3. Click "Save to Omeka" to save changes back to your media item
+4. The modal closes and the preview updates automatically
+
+### Architecture
+
+```
+Upload .elpx → Extract to /files/exelearning/{hash}/ → View via secure proxy
+                                                            ↓
+                                                      Edit in modal
+                                                            ↓
+                                                     Save back to Omeka
+```
 
 ## Installation
+
+### Requirements
+
+- Omeka S 4.0 or later
+- PHP 7.4 or later with ZipArchive extension
+- nginx or Apache web server
 
 ### Manual Installation
 
 1. Download the latest release from the GitHub repository
-2. Extract the zip file to your Omeka S `modules` directory
+2. Extract to your Omeka S `modules` directory as `ExeLearning`
 3. Log in to the Omeka S admin panel and navigate to Modules
-5. Click "Install" next to Three3DViewer
+4. Click "Install" next to ExeLearning
 
-## Installation
+### Server Configuration
 
-See general end user documentation for [Installing a module](http://omeka.org/s/docs/user-manual/modules/#installing-modules)
+#### nginx
+
+Add these rules to your nginx configuration to ensure proper security:
+
+```nginx
+# Block direct access to extracted files
+location ^~ /files/exelearning/ {
+    return 403;
+}
+
+# Route content proxy to PHP
+location ^~ /exelearning/content/ {
+    try_files $uri /index.php$is_args$args;
+}
+```
+
+#### Apache
+
+The module includes an `.htaccess` file that handles security automatically.
 
 ## Usage
 
-1. Upload STL or GLB files to your Omeka S items as you would any other media file
-2. When viewing an item with a 3D model, the model will automatically be displayed in an interactive viewer
-3. Use your mouse to:
-   - Left-click and drag to rotate the model
-   - Right-click and drag to pan
-   - Scroll to zoom in and out
-4. The module settings allow administrators to choose the default viewing library. Select the legacy Three.js/model-viewer
-   stack for the original experience or opt into Babylon.js for advanced camera behaviour, lighting presets, optional
-   environment ground/skybox, WebXR (VR/AR) support, and an inspector toolbar for fine-tuning scenes on demand.
+### Uploading eXeLearning Files
+
+1. Navigate to an Item in Omeka S
+2. Click "Add media" and select your .elpx file
+3. Save the item
+4. The eXeLearning content will be displayed in the media viewer
+
+### Editing Files
+
+1. Go to the media page (Admin > Items > [Your Item] > [Media])
+2. Click "Edit in eXeLearning" button
+3. Edit your content in the modal
+4. Click "Save to Omeka" to save your changes
+
+### Public Display
+
+eXeLearning content is automatically displayed on public item pages using an embedded viewer.
 
 ## Local Development with Docker
 
-This repository includes a **Makefile** and a `docker-compose.yml` for quick local development using [erseco/alpine-omeka-s](https://github.com/erseco/alpine-omeka-s).
+This repository includes a **Makefile** and `docker-compose.yml` for local development.
 
 ### Quick start
 
@@ -51,35 +107,59 @@ make up
 
 Then open [http://localhost:8080](http://localhost:8080).
 
-### Sample data import
-
-On first boot, the container automatically installs CSVImport and, if `data/sample_3d_data.csv` is present, imports it so you immediately have items to test the viewer. To trigger a manual import inside the container, run:
-
-```
-make shell
-cd /var/www/html && OMEKA_CSV_IMPORT_FILE=/data/sample_3d_data.csv php import_cli.php "$OMEKA_CSV_IMPORT_FILE"
-```
-
 ### Preconfigured users
 
-The environment automatically creates several users with different roles:
-
-| Email                                                   | Role         | Password        |
-| ------------------------------------------------------- | ------------ | --------------- |
-| [admin@example.com](mailto:admin@example.com)           | global_admin | PLEASE_CHANGEME |
-| [editor@example.com](mailto:editor@example.com)         | editor       | 1234            |
-
-The **ThreeDViewer module** is automatically enabled, so you can start testing right away.
+| Email               | Role         | Password        |
+|---------------------|--------------|-----------------|
+| admin@example.com   | global_admin | PLEASE_CHANGEME |
 
 ### Useful Make commands
 
-* `make up` – Start Docker containers in interactive mode
-* `make upd` – Start in detached mode (background)
-* `make down` – Stop and remove containers
-* `make shell` – Open a shell inside the Omeka S container
-* `make lint` – Run PHP_CodeSniffer
-* `make fix` – Auto-fix coding style issues
-* `make package VERSION=1.2.3` – Build a `.zip` release of the module
-* `make test` – Run PHPUnit tests
+* `make up` - Start Docker containers in interactive mode
+* `make upd` - Start in detached mode (background)
+* `make down` - Stop and remove containers
+* `make shell` - Open a shell inside the Omeka S container
+* `make lint` - Run PHP_CodeSniffer
+* `make fix` - Auto-fix coding style issues
+* `make package VERSION=1.2.3` - Build a `.zip` release
 
 Run `make help` for a full list.
+
+## Security
+
+This module implements several security measures:
+
+- **Iframe sandboxing**: Prevents content from accessing parent page resources
+- **Content Security Policy**: Restricts what resources content can load
+- **Secure proxy**: All content served through PHP with validation
+- **CSRF protection**: API endpoints require valid tokens
+- **ACL integration**: Respects Omeka S permissions
+
+For detailed security information, see [claude.md](claude.md).
+
+## Troubleshooting
+
+### Content not displaying
+
+- Check that ZipArchive PHP extension is installed
+- Verify nginx/Apache configuration blocks are in place
+- Check file permissions on `/files/exelearning/` directory
+
+### Editor not loading
+
+- Ensure the `dist/static` directory contains the eXeLearning editor files
+- Check browser console for JavaScript errors
+
+### Save not working
+
+- Verify user has "update" permission for media
+- Check that CSRF token is valid (try refreshing the page)
+
+## License
+
+This module is licensed under the GPL-3.0 License.
+
+## Credits
+
+- Based on the [wp-exelearning](https://github.com/exelearning/wp-exelearning) WordPress plugin
+- Uses the [eXeLearning](https://exelearning.net/) editor

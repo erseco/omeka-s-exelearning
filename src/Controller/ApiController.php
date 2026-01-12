@@ -24,6 +24,27 @@ class ApiController extends AbstractActionController
     }
 
     /**
+     * Create a JSON error response with status code.
+     */
+    protected function errorResponse(int $statusCode, string $message): JsonModel
+    {
+        $this->getResponse()->setStatusCode($statusCode);
+        return new JsonModel(['success' => false, 'message' => $message]);
+    }
+
+    /**
+     * Get media by ID or return null if not found.
+     */
+    protected function getMediaOrFail(int $mediaId)
+    {
+        try {
+            return $this->api()->read('media', $mediaId)->getContent();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
      * Save an edited eXeLearning file.
      *
      * POST /api/exelearning/save/:id
@@ -34,23 +55,12 @@ class ApiController extends AbstractActionController
     {
         $request = $this->getRequest();
 
-        // Only accept POST requests
         if (!$request->isPost()) {
-            $this->getResponse()->setStatusCode(405);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Method not allowed',
-            ]);
+            return $this->errorResponse(405, 'Method not allowed');
         }
 
-        // Check authentication
-        $user = $this->identity();
-        if (!$user) {
-            $this->getResponse()->setStatusCode(401);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Unauthorized',
-            ]);
+        if (!$this->identity()) {
+            return $this->errorResponse(401, 'Unauthorized');
         }
 
         // Validate CSRF token
@@ -58,78 +68,47 @@ class ApiController extends AbstractActionController
         if ($csrfToken) {
             $csrf = new \Laminas\Validator\Csrf(['name' => 'csrf']);
             if (!$csrf->isValid($csrfToken)) {
-                $this->getResponse()->setStatusCode(403);
-                return new JsonModel([
-                    'success' => false,
-                    'message' => 'CSRF: Invalid or missing CSRF token',
-                ]);
+                return $this->errorResponse(403, 'CSRF: Invalid or missing CSRF token');
             }
         }
 
         $mediaId = $this->params('id');
         if (!$mediaId) {
-            $this->getResponse()->setStatusCode(400);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Media ID required',
-            ]);
+            return $this->errorResponse(400, 'Media ID required');
         }
 
-        // Get the media
-        $api = $this->api();
-        try {
-            $media = $api->read('media', $mediaId)->getContent();
-        } catch (\Exception $e) {
-            $this->getResponse()->setStatusCode(404);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Media not found',
-            ]);
+        $media = $this->getMediaOrFail((int) $mediaId);
+        if (!$media) {
+            return $this->errorResponse(404, 'Media not found');
         }
 
         // Check permissions
         $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed($media->item(), 'update')) {
-            $this->getResponse()->setStatusCode(403);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Forbidden',
-            ]);
+        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+            return $this->errorResponse(403, 'Forbidden');
         }
 
-        // Get uploaded file
         $files = $request->getFiles();
         if (empty($files['file'])) {
-            $this->getResponse()->setStatusCode(400);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'No file uploaded',
-            ]);
+            return $this->errorResponse(400, 'No file uploaded');
         }
 
         $uploadedFile = $files['file'];
-
-        // Check for upload errors
         if ($uploadedFile['error'] !== UPLOAD_ERR_OK) {
-            $this->getResponse()->setStatusCode(400);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Upload failed: error code ' . $uploadedFile['error'],
-            ]);
+            return $this->errorResponse(400, 'Upload failed: error code ' . $uploadedFile['error']);
         }
 
         try {
             // Replace the file
             $result = $this->elpService->replaceFile($media, $uploadedFile['tmp_name']);
 
-            // Build preview URL
+            // Build secure preview URL using proxy controller
             $previewUrl = null;
             if ($result['hasPreview']) {
-                $serverUrl = $this->getRequest()->getUri()->getScheme() . '://'
-                    . $this->getRequest()->getUri()->getHost();
-                $basePath = $this->getRequest()->getBasePath();
-                $previewUrl = $serverUrl . $basePath . '/modules/ExeLearning/data/exelearning/'
-                    . $result['hash'] . '/index.html';
+                $previewUrl = $this->url()->fromRoute('exelearning-content', [
+                    'hash' => $result['hash'],
+                    'file' => 'index.html',
+                ]);
             }
 
             return new JsonModel([
@@ -139,11 +118,7 @@ class ApiController extends AbstractActionController
                 'preview_url' => $previewUrl,
             ]);
         } catch (\Exception $e) {
-            $this->getResponse()->setStatusCode(500);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Save failed: ' . $e->getMessage(),
-            ]);
+            return $this->errorResponse(500, 'Save failed: ' . $e->getMessage());
         }
     }
 
@@ -151,44 +126,29 @@ class ApiController extends AbstractActionController
      * Get eXeLearning file data.
      *
      * GET /api/exelearning/elp-data/:id
-     *
-     * @return JsonModel
      */
-    public function getDataAction()
+    public function getDataAction(): JsonModel
     {
         $mediaId = $this->params('id');
-
         if (!$mediaId) {
-            $this->getResponse()->setStatusCode(400);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Media ID required',
-            ]);
+            return $this->errorResponse(400, 'Media ID required');
         }
 
-        // Get the media
-        $api = $this->api();
-        try {
-            $media = $api->read('media', $mediaId)->getContent();
-        } catch (\Exception $e) {
-            $this->getResponse()->setStatusCode(404);
-            return new JsonModel([
-                'success' => false,
-                'message' => 'Media not found',
-            ]);
+        $media = $this->getMediaOrFail((int) $mediaId);
+        if (!$media) {
+            return $this->errorResponse(404, 'Media not found');
         }
 
         $hash = $this->elpService->getMediaHash($media);
         $hasPreview = $this->elpService->hasPreview($media);
 
-        // Build preview URL
+        // Build secure preview URL using proxy controller
         $previewUrl = null;
         if ($hash && $hasPreview) {
-            $serverUrl = $this->getRequest()->getUri()->getScheme() . '://'
-                . $this->getRequest()->getUri()->getHost();
-            $basePath = $this->getRequest()->getBasePath();
-            $previewUrl = $serverUrl . $basePath . '/modules/ExeLearning/data/exelearning/'
-                . $hash . '/index.html';
+            $previewUrl = $this->url()->fromRoute('exelearning-content', [
+                'hash' => $hash,
+                'file' => 'index.html',
+            ]);
         }
 
         return new JsonModel([

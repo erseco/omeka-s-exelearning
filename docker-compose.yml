@@ -59,6 +59,7 @@ services:
       - omekas_data:/var/www/html/volume:Z
       - ./:/var/www/html/volume/modules/ExeLearning
       - ./data:/data:ro
+      - ./data/nginx-exelearning.conf:/etc/nginx/server-conf.d/exelearning.conf:ro
 
   mariadb:
     image: mariadb:latest

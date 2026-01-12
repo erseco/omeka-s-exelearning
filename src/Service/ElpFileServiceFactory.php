@@ -14,9 +14,6 @@ class ElpFileServiceFactory implements FactoryInterface
         $entityManager = $services->get('Omeka\EntityManager');
         $logger = $services->get('Omeka\Logger');
 
-        // Get module base path for extracted content
-        $basePath = dirname(__DIR__, 2) . '/data/exelearning';
-
         // Get Omeka files path from the file store configuration
         $fileStore = $services->get('Omeka\File\Store');
 
@@ -43,6 +40,9 @@ class ElpFileServiceFactory implements FactoryInterface
         if (is_dir($volumePath)) {
             $filesPath = $volumePath;
         }
+
+        // Extracted eXeLearning content goes in /files/exelearning/
+        $basePath = $filesPath . '/exelearning';
 
         $logger->info(sprintf('[ExeLearning] ElpFileService initialized with basePath=%s, filesPath=%s', $basePath, $filesPath));
 

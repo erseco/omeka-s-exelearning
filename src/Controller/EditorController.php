@@ -52,8 +52,8 @@ class EditorController extends AbstractActionController
 
         // Check permissions
         $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed($media->item(), 'update')) {
-            $this->messenger()->addError('You do not have permission to edit this media.');
+        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+            $this->messenger()->addError('You do not have permission to edit media.');
             return $this->redirect()->toRoute('admin');
         }
 
@@ -65,8 +65,8 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        // Check if editor exists
-        $editorPath = dirname(__DIR__, 2) . '/dist/static/index.html';
+        // Check if editor exists (symlinked from asset/static -> dist/static)
+        $editorPath = dirname(__DIR__, 2) . '/asset/static/index.html';
         if (!file_exists($editorPath)) {
             $this->messenger()->addError(
                 'eXeLearning editor not found. Please run "make build-editor" in the module directory.'
@@ -75,8 +75,13 @@ class EditorController extends AbstractActionController
         }
 
         // Build configuration for the editor
-        $serverUrl = $this->getRequest()->getUri()->getScheme() . '://'
-            . $this->getRequest()->getUri()->getHost();
+        $uri = $this->getRequest()->getUri();
+        $port = $uri->getPort();
+        $serverUrl = $uri->getScheme() . '://' . $uri->getHost();
+        // Include port if it's not the default for the scheme
+        if ($port && !(($uri->getScheme() === 'http' && $port == 80) || ($uri->getScheme() === 'https' && $port == 443))) {
+            $serverUrl .= ':' . $port;
+        }
         $basePath = $this->getRequest()->getBasePath();
 
         // Generate CSRF token
@@ -89,7 +94,7 @@ class EditorController extends AbstractActionController
             'elpUrl' => $media->originalUrl(),
             'projectId' => 'omeka-media-' . $mediaId,
             'saveEndpoint' => $serverUrl . $basePath . '/api/exelearning/save/' . $mediaId,
-            'editorBaseUrl' => $serverUrl . $basePath . '/modules/ExeLearning/dist/static',
+            'editorBaseUrl' => $serverUrl . $basePath . '/modules/ExeLearning/asset/static',
             'csrfToken' => $csrfToken,
             'locale' => substr($this->settings()->get('locale', 'en_US'), 0, 2),
             'userName' => $user->getName(),

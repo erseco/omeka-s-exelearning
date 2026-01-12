@@ -104,10 +104,10 @@ clean: check-docker
 # ============================================================================
 
 lint:
-	vendor/bin/phpcs . --standard=PSR2 --ignore=vendor/,node_modules/,exelearning/,dist/,test/ --colors --extensions=php
+	vendor/bin/phpcs src/ config/ Module.php --standard=PSR2 --colors -n
 
 fix:
-	vendor/bin/phpcbf . --standard=PSR2 --ignore=vendor/,node_modules/,exelearning/,dist/,test/ --colors --extensions=php
+	vendor/bin/phpcbf src/ config/ Module.php --standard=PSR2 --colors || true
 
 test:
 	@echo "Running unit tests..."

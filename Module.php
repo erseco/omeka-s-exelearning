@@ -138,6 +138,193 @@ class Module extends AbstractModule
             'api.delete.pre',
             [$this, 'handleMediaDelete']
         );
+
+        // Inject iframe viewer in admin media show page
+        $sharedEventManager->attach(
+            'Omeka\Controller\Admin\Media',
+            'view.show.after',
+            [$this, 'handleAdminMediaShow']
+        );
+
+        // Add thumbnail script to admin pages
+        $sharedEventManager->attach(
+            '*',
+            'view.layout',
+            [$this, 'handleViewLayout']
+        );
+
+        // Inject iframe viewer in public item show page
+        $sharedEventManager->attach(
+            'Omeka\Controller\Site\Item',
+            'view.show.after',
+            [$this, 'handlePublicItemShow']
+        );
+    }
+
+    /**
+     * Handle public item show view - inject iframe viewer for eXeLearning media.
+     *
+     * @param Event $event
+     */
+    public function handlePublicItemShow(Event $event)
+    {
+        $view = $event->getTarget();
+        $item = $view->item;
+
+        if (!$item) {
+            return;
+        }
+
+        $services = $this->getServiceLocator();
+        $logger = $services->get('Omeka\Logger');
+        $elpService = $services->get(Service\ElpFileService::class);
+
+        // Find eXeLearning media in this item
+        foreach ($item->media() as $media) {
+            if (!$this->isExeLearningFile($media)) {
+                continue;
+            }
+
+            $hash = $elpService->getMediaHash($media);
+            $hasPreview = $elpService->hasPreview($media);
+
+            // Auto-process if not yet extracted
+            if (!$hash || !$hasPreview) {
+                $logger->info(sprintf('[ExeLearning] Auto-processing media %d on public view', $media->id()));
+                try {
+                    $result = $elpService->processUploadedFile($media);
+                    $hash = $result['hash'];
+                    $hasPreview = $result['hasPreview'];
+                } catch (\Exception $e) {
+                    $logger->err(sprintf('[ExeLearning] Auto-process failed: %s', $e->getMessage()));
+                    continue;
+                }
+            }
+
+            if (!$hash || !$hasPreview) {
+                continue;
+            }
+
+            // Use secure content proxy instead of direct file access
+            $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+
+            echo $view->partial('exelearning/public/item-show', [
+                'media' => $media,
+                'previewUrl' => $previewUrl,
+            ]);
+        }
+    }
+
+    /**
+     * Handle admin media show view - inject iframe viewer for eXeLearning files.
+     *
+     * @param Event $event
+     */
+    public function handleAdminMediaShow(Event $event)
+    {
+        $view = $event->getTarget();
+        $media = $view->resource;
+
+        if (!$this->isExeLearningFile($media)) {
+            return;
+        }
+
+        $services = $this->getServiceLocator();
+        $logger = $services->get('Omeka\Logger');
+        $elpService = $services->get(Service\ElpFileService::class);
+
+        $hash = $elpService->getMediaHash($media);
+        $hasPreview = $elpService->hasPreview($media);
+
+        // Auto-process if not yet extracted
+        if (!$hash || !$hasPreview) {
+            $logger->info(sprintf('[ExeLearning] Auto-processing media %d on view', $media->id()));
+            try {
+                $result = $elpService->processUploadedFile($media);
+                $hash = $result['hash'];
+                $hasPreview = $result['hasPreview'];
+                $logger->info(sprintf('[ExeLearning] Auto-process complete: hash=%s, hasPreview=%s', $hash, $hasPreview ? 'yes' : 'no'));
+            } catch (\Exception $e) {
+                $logger->err(sprintf('[ExeLearning] Auto-process failed: %s', $e->getMessage()));
+                return;
+            }
+        }
+
+        if (!$hash || !$hasPreview) {
+            return;
+        }
+
+        // Use secure content proxy instead of direct file access
+            $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+
+        echo $view->partial('exelearning/admin/media-show', [
+            'media' => $media,
+            'previewUrl' => $previewUrl,
+        ]);
+    }
+
+    /**
+     * Handle view layout - add thumbnail replacement script to admin pages.
+     *
+     * @param Event $event
+     */
+    public function handleViewLayout(Event $event)
+    {
+        $view = $event->getTarget();
+
+        // Only add to admin pages
+        $routeMatch = $this->getServiceLocator()->get('Application')->getMvcEvent()->getRouteMatch();
+        if (!$routeMatch) {
+            return;
+        }
+
+        $routeName = $routeMatch->getMatchedRouteName();
+        if (strpos($routeName, 'admin') !== 0) {
+            return;
+        }
+
+        // Add the thumbnail URL as a data attribute and load the script
+        $basePath = $view->basePath();
+        $thumbnailUrl = $basePath . '/modules/ExeLearning/asset/thumbnails/elpx.png';
+        $scriptUrl = $basePath . '/modules/ExeLearning/asset/js/exelearning-thumbnail.js';
+
+        // Get item IDs that contain eXeLearning media
+        $exeItemIds = $this->getExeLearningItemIds();
+
+        $view->headScript()->appendFile($scriptUrl);
+        $view->headScript()->appendScript(
+            'document.documentElement.setAttribute("data-exelearning-thumbnail", "' . $thumbnailUrl . '");' .
+            'window.exelearningItemIds = ' . json_encode($exeItemIds) . ';'
+        );
+    }
+
+    /**
+     * Get IDs of items that contain eXeLearning media.
+     *
+     * @return array
+     */
+    protected function getExeLearningItemIds(): array
+    {
+        $services = $this->getServiceLocator();
+
+        try {
+            $connection = $services->get('Omeka\Connection');
+
+            // Query for item IDs that have media with .elpx extension
+            $sql = "SELECT DISTINCT m.item_id
+                    FROM media m
+                    WHERE m.source LIKE '%.elpx'
+                       OR m.source LIKE '%.elp'";
+
+            $stmt = $connection->query($sql);
+            $results = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            return array_map('intval', $results);
+        } catch (\Exception $e) {
+            $logger = $services->get('Omeka\Logger');
+            $logger->err(sprintf('[ExeLearning] Failed to get item IDs: %s', $e->getMessage()));
+            return [];
+        }
     }
 
     /**

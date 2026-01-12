@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace ExeLearning;
 
 use Laminas\Router\Http\Literal;
+use Laminas\Router\Http\Regex;
 use Laminas\Router\Http\Segment;
 
 return [
@@ -17,6 +18,12 @@ return [
         'factories' => [
             Controller\ApiController::class => Controller\ApiControllerFactory::class,
             Controller\EditorController::class => Controller\EditorControllerFactory::class,
+            Controller\ContentController::class => Controller\ContentControllerFactory::class,
+        ],
+        'aliases' => [
+            'ExeLearning\Controller\Editor' => Controller\EditorController::class,
+            'ExeLearning\Controller\Api' => Controller\ApiController::class,
+            'ExeLearning\Controller\Content' => Controller\ContentController::class,
         ],
     ],
 
@@ -49,6 +56,21 @@ return [
 
     'router' => [
         'routes' => [
+            // Secure content delivery route - serves extracted eXeLearning content with security headers
+            // Uses Regex route to properly capture file paths with multiple slashes
+            'exelearning-content' => [
+                'type' => Regex::class,
+                'options' => [
+                    'regex' => '/exelearning/content/(?<hash>[a-f0-9]{40})(?:/(?<file>.*))?',
+                    'spec' => '/exelearning/content/%hash%/%file%',
+                    'defaults' => [
+                        '__NAMESPACE__' => 'ExeLearning\Controller',
+                        'controller' => 'Content',
+                        'action' => 'serve',
+                        'file' => 'index.html',
+                    ],
+                ],
+            ],
             'exelearning-api' => [
                 'type' => Literal::class,
                 'options' => [

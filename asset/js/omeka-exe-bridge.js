@@ -15,7 +15,18 @@
         return;
     }
 
-    console.log('[Omeka-EXE Bridge] Initializing with config:', config);
+    // Helper: Get bridge instance from available sources
+    function getBridgeInstance() {
+        return window.YjsModules?.getBridge?.()
+            || window.eXeLearning?.app?.project?.bridge;
+    }
+
+    // Helper: Send message to parent window
+    function notifyParent(message) {
+        if (window.parent !== window) {
+            window.parent.postMessage(message, '*');
+        }
+    }
 
     /**
      * Wait for the eXeLearning app to be ready.
@@ -49,9 +60,7 @@
             let attempts = 0;
             const check = () => {
                 attempts++;
-                const bridge = window.YjsModules?.getBridge?.()
-                    || window.eXeLearning?.app?.project?.bridge;
-
+                const bridge = getBridgeInstance();
                 if (bridge?.initialized || bridge?.structureBinding) {
                     resolve(bridge);
                 } else if (attempts < maxAttempts) {
@@ -112,17 +121,11 @@
      * Save the current project to Omeka-S.
      */
     async function saveToOmeka() {
-        // Notify parent window that save started
-        if (window.parent !== window) {
-            window.parent.postMessage({ type: 'exelearning-save-start' }, '*');
-        }
-
+        notifyParent({ type: 'exelearning-save-start' });
         showNotification('info', config.i18n?.saving || 'Saving...');
 
         try {
-            const bridge = window.YjsModules?.getBridge?.()
-                || window.eXeLearning?.app?.project?.bridge;
-
+            const bridge = getBridgeInstance();
             if (!bridge) {
                 throw new Error('Project bridge not available');
             }
@@ -167,29 +170,18 @@
 
             if (result.success) {
                 showNotification('success', config.i18n?.saved || 'Saved successfully!');
-
-                // Notify parent window
-                if (window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'exelearning-save-complete',
-                        mediaId: config.mediaId,
-                        previewUrl: result.preview_url
-                    }, '*');
-                }
+                notifyParent({
+                    type: 'exelearning-save-complete',
+                    mediaId: config.mediaId,
+                    previewUrl: result.preview_url
+                });
             } else {
                 throw new Error(result.message || 'Save failed');
             }
         } catch (error) {
             console.error('[Omeka-EXE Bridge] Save failed:', error);
             showNotification('error', (config.i18n?.error || 'Error') + ': ' + error.message);
-
-            // Notify parent window of error
-            if (window.parent !== window) {
-                window.parent.postMessage({
-                    type: 'exelearning-save-error',
-                    message: error.message
-                }, '*');
-            }
+            notifyParent({ type: 'exelearning-save-error', message: error.message });
         }
     }
 
@@ -273,9 +265,7 @@
             addSaveButton();
 
             // Notify parent window that bridge is ready
-            if (window.parent !== window) {
-                window.parent.postMessage({ type: 'exelearning-bridge-ready' }, '*');
-            }
+            notifyParent({ type: 'exelearning-bridge-ready' });
 
             // Listen for Ctrl+S / Cmd+S
             document.addEventListener('keydown', (e) => {
