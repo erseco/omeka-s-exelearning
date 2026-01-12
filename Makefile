@@ -181,14 +181,24 @@ update-po:
 
 check-untranslated:
 	@echo "Checking untranslated strings..."
-	@find language -name "*.po" | while read po; do \
-		echo "\n$$po:"; \
-		msgattrib --untranslated "$$po" | if grep -q msgid; then \
-			echo "Warning: Untranslated strings found!"; exit 1; \
+	@FOUND_UNTRANSLATED=0; \
+	for po in language/*.po; do \
+		echo ""; \
+		echo "Checking $$po..."; \
+		UNTRANSLATED=$$(msgattrib --untranslated "$$po" 2>/dev/null | grep -c "^msgid \"" || true); \
+		if [ "$$UNTRANSLATED" -gt 1 ]; then \
+			echo "  Warning: $$((UNTRANSLATED - 1)) untranslated string(s) found:"; \
+			msgattrib --untranslated "$$po" 2>/dev/null | grep -A1 "^msgid \"" | grep "^msgid" | head -10; \
+			FOUND_UNTRANSLATED=1; \
 		else \
-			echo "All strings translated!"; \
-		fi \
-	done
+			echo "  All strings translated!"; \
+		fi; \
+	done; \
+	if [ "$$FOUND_UNTRANSLATED" -eq 1 ]; then \
+		echo ""; \
+		echo "Error: Untranslated strings found. Run 'make update-po' and translate."; \
+		exit 1; \
+	fi
 
 compile-mo:
 	@echo "Compiling .po files into .mo..."
