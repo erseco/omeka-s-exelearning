@@ -3,25 +3,54 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/*.md'
   push:
     tags:
       - '*'
     branches:
-      - '*' 
+      - '*'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/*.md'
+
+# Cancel previous runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   lint_and_test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      # Checkout the code
       - uses: actions/checkout@v4
 
-      - name: PHP setup
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'  # Adjust the version according to your needs
+          php-version: '8.3'
           extensions: mbstring, intl, curl, dom, json, pdo, mysql, xml, zip
-          tools: composer
+          tools: composer:v2
+          coverage: xdebug
+
+      # === CACHING ===
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('composer.json') }}
+          restore-keys: composer-
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
@@ -29,6 +58,7 @@ jobs:
       - name: Install gettext
         run: sudo apt-get install -y gettext
 
+      # === LINT ===
       - name: Check untranslated strings
         run: make check-untranslated
 
@@ -38,5 +68,6 @@ jobs:
       - name: Run code linting
         run: make lint
 
-      - name: Run unit tests
+      # === TESTS ===
+      - name: Run unit tests with coverage
         run: make test-coverage

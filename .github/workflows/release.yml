@@ -5,24 +5,38 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   build_and_upload:
     runs-on: ubuntu-latest
     steps:
-      # Checkout the code
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Set environment variables
         run: |
-          echo "RELEASE_TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          RAW_TAG="${GITHUB_REF##*/}"
+          VERSION_TAG="${RAW_TAG#v}"
+          echo "RELEASE_TAG=${VERSION_TAG}" >> $GITHUB_ENV
 
-      - name: Create package using the Makefile
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-dev
+
+      - name: Build static editor
+        run: make build-editor-no-update
+
+      - name: Create package
         run: make package VERSION=${RELEASE_TAG}
 
-      - name: Upload ZIP to the release
+      - name: Upload ZIP to release
         uses: softprops/action-gh-release@v2
         with:
-          files: ThreeDViewer-${{ env.RELEASE_TAG }}.zip
+          files: ExeLearning-${{ env.RELEASE_TAG }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

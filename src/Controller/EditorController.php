@@ -67,8 +67,8 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        // Check if editor exists (symlinked from asset/static -> dist/static)
-        $editorPath = dirname(__DIR__, 2) . '/asset/static/index.html';
+        // Check if editor exists
+        $editorPath = dirname(__DIR__, 2) . '/dist/static/index.html';
         if (!file_exists($editorPath)) {
             $this->messenger()->addError(
                 'eXeLearning editor not found. Please run "make build-editor" in the module directory.'

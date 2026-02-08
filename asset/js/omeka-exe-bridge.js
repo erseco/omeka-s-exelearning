@@ -9,41 +9,29 @@
 (function() {
     'use strict';
 
-    const config = window.__OMEKA_EXE_CONFIG__;
+    var config = window.__OMEKA_EXE_CONFIG__;
     if (!config) {
         console.error('[Omeka-EXE Bridge] Configuration not found');
         return;
     }
 
-    // Helper: Get bridge instance from available sources
-    function getBridgeInstance() {
-        return window.YjsModules?.getBridge?.()
-            || window.eXeLearning?.app?.project?.bridge;
-    }
-
-    // Helper: Send message to parent window
-    function notifyParent(message) {
-        if (window.parent !== window) {
-            window.parent.postMessage(message, '*');
-        }
-    }
+    console.log('[Omeka-EXE Bridge] Initializing with config:', config);
 
     /**
-     * Wait for the eXeLearning app to be ready.
-     * @param {number} maxAttempts Maximum attempts before failing
-     * @returns {Promise<object>} The eXeLearning app instance
+     * Wait for the eXeLearning app to be ready (legacy fallback)
      */
-    function waitForApp(maxAttempts = 100) {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const check = () => {
+    function waitForAppLegacy(maxAttempts) {
+        maxAttempts = maxAttempts || 100;
+        return new Promise(function(resolve, reject) {
+            var attempts = 0;
+            var check = function() {
                 attempts++;
                 if (window.eXeLearning && window.eXeLearning.app) {
                     resolve(window.eXeLearning.app);
                 } else if (attempts < maxAttempts) {
                     setTimeout(check, 100);
                 } else {
-                    reject(new Error('eXeLearning app did not initialize'));
+                    reject(new Error('App did not initialize'));
                 }
             };
             check();
@@ -51,22 +39,23 @@
     }
 
     /**
-     * Wait for the YJS bridge to be ready.
-     * @param {number} maxAttempts Maximum attempts before giving up
-     * @returns {Promise<object|null>} The bridge instance or null
+     * Wait for the Yjs project bridge to be ready.
      */
-    function waitForBridge(maxAttempts = 100) {
-        return new Promise((resolve) => {
-            let attempts = 0;
-            const check = () => {
+    function waitForBridge(maxAttempts) {
+        maxAttempts = maxAttempts || 150;
+        return new Promise(function(resolve, reject) {
+            var attempts = 0;
+            var check = function() {
                 attempts++;
-                const bridge = getBridgeInstance();
-                if (bridge?.initialized || bridge?.structureBinding) {
+                var bridge = window.eXeLearning?.app?.project?._yjsBridge
+                    || window.YjsModules?.getBridge?.();
+                if (bridge) {
+                    console.log('[Omeka-EXE Bridge] Bridge found after', attempts, 'attempts');
                     resolve(bridge);
                 } else if (attempts < maxAttempts) {
                     setTimeout(check, 200);
                 } else {
-                    resolve(null);
+                    reject(new Error('Project bridge did not initialize'));
                 }
             };
             check();
@@ -74,10 +63,31 @@
     }
 
     /**
-     * Import an ELP file from Omeka-S.
+     * Show or update the loading screen
+     */
+    function updateLoadScreen(message, show) {
+        if (show === undefined) show = true;
+        var loadScreen = document.getElementById('load-screen-main');
+        var loadMessage = loadScreen?.querySelector('.loading-message, p');
+
+        if (loadScreen) {
+            if (show) {
+                loadScreen.classList.remove('hide');
+            } else {
+                loadScreen.classList.add('hide');
+            }
+        }
+
+        if (loadMessage && message) {
+            loadMessage.textContent = message;
+        }
+    }
+
+    /**
+     * Import ELP file from Omeka-S
      */
     async function importElpFromOmeka() {
-        const elpUrl = config.elpUrl;
+        var elpUrl = config.elpUrl;
         if (!elpUrl) {
             console.log('[Omeka-EXE Bridge] No ELP URL provided, starting with empty project');
             return;
@@ -86,189 +96,201 @@
         console.log('[Omeka-EXE Bridge] Starting import from:', elpUrl);
 
         try {
-            const bridge = await waitForBridge();
-            if (!bridge) {
-                throw new Error('Project bridge not available');
-            }
+            updateLoadScreen(config.i18n?.loading || 'Loading project...');
+
+            // Wait for the Yjs bridge to be initialized
+            updateLoadScreen('Waiting for editor...');
+            var bridge = await waitForBridge();
 
             // Fetch the ELP file
-            const response = await fetch(elpUrl);
+            updateLoadScreen('Downloading file...');
+            var response = await fetch(elpUrl);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
             }
 
-            const blob = await response.blob();
-            const filename = elpUrl.split('/').pop().split('?')[0] || 'project.elpx';
-            const file = new File([blob], filename, { type: 'application/zip' });
+            // Convert to File object
+            var blob = await response.blob();
+            console.log('[Omeka-EXE Bridge] File downloaded, size:', blob.size);
+            var filename = elpUrl.split('/').pop().split('?')[0] || 'project.elpx';
+            var file = new File([blob], filename, { type: 'application/zip' });
 
-            // Import using YjsProjectBridge
-            await bridge.importFromElpx(file, {
-                clearExisting: true,
-                onProgress: (progress) => {
-                    console.log('[Omeka-EXE Bridge] Import progress:', progress);
-                }
-            });
+            // Import using the project API or bridge directly
+            updateLoadScreen('Importing content...');
+            var project = window.eXeLearning?.app?.project;
+            if (typeof project?.importElpxFile === 'function') {
+                console.log('[Omeka-EXE Bridge] Using project.importElpxFile...');
+                await project.importElpxFile(file);
+            } else if (typeof project?.importFromElpxViaYjs === 'function') {
+                console.log('[Omeka-EXE Bridge] Using project.importFromElpxViaYjs...');
+                await project.importFromElpxViaYjs(file, { clearExisting: true });
+            } else {
+                console.log('[Omeka-EXE Bridge] Using bridge.importFromElpx...');
+                await bridge.importFromElpx(file, { clearExisting: true });
+            }
 
             console.log('[Omeka-EXE Bridge] ELP imported successfully');
-            showNotification('success', config.i18n?.loading || 'Project loaded');
         } catch (error) {
             console.error('[Omeka-EXE Bridge] Import failed:', error);
-            showNotification('error', 'Error loading project: ' + error.message);
+            updateLoadScreen('Error loading project');
+        } finally {
+            setTimeout(function() {
+                updateLoadScreen('', false);
+            }, 500);
         }
     }
 
     /**
-     * Save the current project to Omeka-S.
+     * Save project to Omeka-S
      */
     async function saveToOmeka() {
-        notifyParent({ type: 'exelearning-save-start' });
-        showNotification('info', config.i18n?.saving || 'Saving...');
+        // Notify parent window that save is starting
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'exelearning-save-start' }, '*');
+        }
 
         try {
-            const bridge = getBridgeInstance();
-            if (!bridge) {
+            console.log('[Omeka-EXE Bridge] Starting save...');
+
+            // Get the project bridge for export
+            var project = window.eXeLearning?.app?.project;
+            var yjsBridge = project?._yjsBridge
+                || window.YjsModules?.getBridge?.()
+                || project?.bridge;
+
+            if (!yjsBridge) {
                 throw new Error('Project bridge not available');
             }
 
-            // Export to ELPX blob
-            let blob;
-            if (window.SharedExporters?.createExporter) {
-                const exporter = window.SharedExporters.createExporter(
+            // Export using quickExport or legacy createExporter
+            var blob;
+            if (window.SharedExporters?.quickExport) {
+                console.log('[Omeka-EXE Bridge] Using SharedExporters.quickExport...');
+                var result = await window.SharedExporters.quickExport(
                     'elpx',
-                    bridge.documentManager,
-                    bridge.assetCache,
-                    bridge.resourceFetcher,
-                    bridge.assetManager
+                    yjsBridge.documentManager,
+                    null,
+                    yjsBridge.resourceFetcher,
+                    {},
+                    yjsBridge.assetManager
                 );
-                const result = await exporter.export();
                 if (!result.success || !result.data) {
                     throw new Error('Export failed');
                 }
                 blob = new Blob([result.data], { type: 'application/zip' });
-            } else if (window.ElpxExporter) {
-                const exporter = new window.ElpxExporter(bridge);
-                const result = await exporter.export();
-                blob = new Blob([result], { type: 'application/zip' });
+            } else if (window.SharedExporters?.createExporter) {
+                console.log('[Omeka-EXE Bridge] Using SharedExporters.createExporter...');
+                var exporter = window.SharedExporters.createExporter(
+                    'elpx',
+                    yjsBridge.documentManager,
+                    yjsBridge.assetCache,
+                    yjsBridge.resourceFetcher,
+                    yjsBridge.assetManager
+                );
+                var exportResult = await exporter.export();
+                if (!exportResult.success || !exportResult.data) {
+                    throw new Error('Export failed');
+                }
+                blob = new Blob([exportResult.data], { type: 'application/zip' });
             } else {
                 throw new Error('No exporter available');
             }
 
+            console.log('[Omeka-EXE Bridge] Export complete, size:', blob.size);
+
             // Upload to Omeka-S
-            const formData = new FormData();
+            var formData = new FormData();
             formData.append('file', blob, 'project.elpx');
             if (config.csrfToken) {
                 formData.append('csrf', config.csrfToken);
             }
 
-            const response = await fetch(config.saveEndpoint, {
+            console.log('[Omeka-EXE Bridge] Uploading to:', config.saveEndpoint);
+
+            var saveResponse = await fetch(config.saveEndpoint, {
                 method: 'POST',
                 credentials: 'same-origin',
                 body: formData
             });
 
-            const result = await response.json();
+            var saveResult = await saveResponse.json();
 
-            if (result.success) {
+            if (saveResult.success) {
+                console.log('[Omeka-EXE Bridge] Save successful');
                 showNotification('success', config.i18n?.saved || 'Saved successfully!');
-                notifyParent({
-                    type: 'exelearning-save-complete',
-                    mediaId: config.mediaId,
-                    previewUrl: result.preview_url
-                });
+
+                // Notify parent window
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'exelearning-save-complete',
+                        mediaId: config.mediaId,
+                        previewUrl: saveResult.preview_url
+                    }, '*');
+                }
             } else {
-                throw new Error(result.message || 'Save failed');
+                throw new Error(saveResult.message || 'Save failed');
             }
         } catch (error) {
             console.error('[Omeka-EXE Bridge] Save failed:', error);
             showNotification('error', (config.i18n?.error || 'Error') + ': ' + error.message);
-            notifyParent({ type: 'exelearning-save-error', message: error.message });
+
+            // Notify parent window that save failed
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'exelearning-save-error', message: error.message }, '*');
+            }
         }
     }
 
     /**
-     * Show a notification to the user.
-     * @param {string} type 'success', 'error', or 'info'
-     * @param {string} message The message to display
+     * Show notification to user
      */
     function showNotification(type, message) {
-        // Remove existing notification
-        const existing = document.getElementById('omeka-exe-notification');
+        var existing = document.getElementById('omeka-exe-notification');
         if (existing) {
             existing.remove();
         }
 
-        const notification = document.createElement('div');
+        var notification = document.createElement('div');
         notification.id = 'omeka-exe-notification';
-        notification.className = `omeka-exe-notification omeka-exe-notification--${type}`;
+        notification.className = 'omeka-exe-notification omeka-exe-notification--' + type;
         notification.textContent = message;
         document.body.appendChild(notification);
 
-        // Auto-hide after 3 seconds (except for 'info' which stays until replaced)
-        if (type !== 'info') {
-            setTimeout(() => {
-                notification.classList.add('omeka-exe-notification--fade');
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
+        setTimeout(function() {
+            notification.classList.add('omeka-exe-notification--fade');
+            setTimeout(function() { notification.remove(); }, 300);
+        }, 3000);
     }
 
     /**
-     * Add a "Save to Omeka" button to the editor toolbar.
-     */
-    function addSaveButton() {
-        // Wait for the toolbar to exist
-        const checkToolbar = setInterval(() => {
-            const toolbar = document.querySelector('#head-top-buttons, .exe-toolbar, .toolbar-buttons');
-            if (toolbar) {
-                clearInterval(checkToolbar);
-
-                // Check if button already exists
-                if (document.getElementById('omeka-save-button')) {
-                    return;
-                }
-
-                const saveButton = document.createElement('button');
-                saveButton.id = 'omeka-save-button';
-                saveButton.type = 'button';
-                saveButton.className = 'btn btn-primary';
-                saveButton.innerHTML = '<i class="fas fa-save"></i> ' + (config.i18n?.saveButton || 'Save to Omeka');
-                saveButton.style.cssText = 'margin-left: 10px; background: #4caf50; border: none; padding: 8px 16px; border-radius: 4px; color: white; cursor: pointer;';
-
-                saveButton.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    saveToOmeka();
-                });
-
-                toolbar.appendChild(saveButton);
-                console.log('[Omeka-EXE Bridge] Save button added to toolbar');
-            }
-        }, 500);
-
-        // Stop checking after 30 seconds
-        setTimeout(() => clearInterval(checkToolbar), 30000);
-    }
-
-    /**
-     * Initialize the bridge.
+     * Initialize the bridge
      */
     async function init() {
         try {
-            await waitForApp();
-            console.log('[Omeka-EXE Bridge] App ready');
+            console.log('[Omeka-EXE Bridge] Starting initialization...');
 
-            // Import the ELP file if URL provided
+            // Wait for app initialization using the new ready promise or legacy polling
+            if (window.eXeLearning?.ready) {
+                await window.eXeLearning.ready;
+            } else {
+                await waitForAppLegacy();
+            }
+            console.log('[Omeka-EXE Bridge] App initialized');
+
+            // Import ELP if URL provided
             if (config.elpUrl) {
                 await importElpFromOmeka();
+            } else {
+                console.log('[Omeka-EXE Bridge] No elpUrl in config, skipping import');
             }
 
-            // Add save button to toolbar
-            addSaveButton();
-
             // Notify parent window that bridge is ready
-            notifyParent({ type: 'exelearning-bridge-ready' });
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'exelearning-bridge-ready' }, '*');
+            }
 
-            // Listen for Ctrl+S / Cmd+S
-            document.addEventListener('keydown', (e) => {
+            // Listen for save shortcuts (Ctrl+S / Cmd+S)
+            document.addEventListener('keydown', function(e) {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                     e.preventDefault();
                     saveToOmeka();
@@ -276,7 +298,7 @@
             });
 
             // Listen for messages from parent window
-            window.addEventListener('message', (event) => {
+            window.addEventListener('message', function(event) {
                 if (event.data?.type === 'exelearning-request-save') {
                     saveToOmeka();
                 }
@@ -288,7 +310,7 @@
         }
     }
 
-    // Start initialization when DOM is ready
+    // Initialize when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
@@ -297,7 +319,7 @@
 
     // Expose for debugging
     window.omekaExeBridge = {
-        config,
+        config: config,
         save: saveToOmeka,
         import: importElpFromOmeka
     };

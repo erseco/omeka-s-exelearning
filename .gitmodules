@@ -1,4 +1,4 @@
 [submodule "exelearning"]
 	path = exelearning
 	url = https://github.com/exelearning/exelearning.git
-	branch = release/3.1-embedable-version-refactor
+	branch = feature/embedded-static-editor-enhancements
