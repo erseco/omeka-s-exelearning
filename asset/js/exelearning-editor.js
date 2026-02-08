@@ -86,15 +86,24 @@
 
             this.currentMediaId = mediaId;
 
-            if (this.modal && this.iframe) {
-                this.modal.style.display = 'flex';
-                this.isOpen = true;
-                this.iframe.src = editorUrl;
-                document.body.classList.add('exelearning-editor-open');
-            } else {
-                // Fallback: open in new window
+            if (!this.modal) {
                 window.open(editorUrl, '_blank', 'width=1200,height=800');
+                return;
             }
+
+            // Recreate iframe if it was destroyed by a previous close/save
+            if (!this.iframe) {
+                var iframe = document.createElement('iframe');
+                iframe.id = 'exelearning-editor-iframe';
+                iframe.className = 'exelearning-editor-iframe';
+                this.modal.appendChild(iframe);
+                this.iframe = iframe;
+            }
+
+            this.modal.style.display = 'flex';
+            this.isOpen = true;
+            this.iframe.src = editorUrl;
+            document.body.classList.add('exelearning-editor-open');
         },
 
         /**
@@ -105,16 +114,14 @@
                 return;
             }
 
+            // Destroy the iframe to prevent beforeunload dialog
+            this.destroyIframe();
+
             // Hide modal
             if (this.modal) {
                 this.modal.style.display = 'none';
             }
             this.isOpen = false;
-
-            // Clear iframe
-            if (this.iframe) {
-                this.iframe.src = 'about:blank';
-            }
 
             // Remove body class
             document.body.classList.remove('exelearning-editor-open');
@@ -162,13 +169,32 @@
         },
 
         /**
+         * Destroy the iframe to prevent beforeunload dialogs.
+         */
+        destroyIframe: function() {
+            if (!this.iframe) {
+                return;
+            }
+            try {
+                // Remove beforeunload handlers from the iframe's window
+                this.iframe.contentWindow.onbeforeunload = null;
+            } catch (e) {
+                // Cross-origin or already detached
+            }
+            // Remove the iframe from DOM entirely - this prevents
+            // any addEventListener('beforeunload') handlers from firing
+            this.iframe.remove();
+            this.iframe = null;
+        },
+
+        /**
          * Handle save complete.
          *
          * @param {object} data The message data.
          */
         onSaveComplete: function(data) {
-            // Close the modal
-            this.close();
+            // Destroy the iframe to prevent beforeunload dialog
+            this.destroyIframe();
 
             // Reload the page to show updated content
             window.location.reload();

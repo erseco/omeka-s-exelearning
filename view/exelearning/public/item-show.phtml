@@ -60,7 +60,7 @@
             <a href="<?= $this->escapeHtmlAttr($previewUrl) ?>" target="_blank">
                 <?= $this->translate('Open fullscreen') ?>
             </a>
-            <a href="<?= $this->escapeHtmlAttr($media->originalUrl()) ?>" download>
+            <a href="<?= $this->escapeHtmlAttr($media->originalUrl()) ?>" download="<?= $this->escapeHtmlAttr($media->source()) ?>">
                 <?= $this->translate('Download') ?>
             </a>
         </div>
