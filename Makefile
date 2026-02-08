@@ -21,7 +21,7 @@ else
 endif
 
 .PHONY: help check-docker check-bun up upd down pull build lint fix shell clean \
-        update-submodule build-editor build-editor-no-update clean-editor \
+        update-submodule force-update-submodule build-editor build-editor-no-update clean-editor \
         package generate-pot update-po check-untranslated compile-mo i18n test test-coverage
 
 # ============================================================================
@@ -30,40 +30,60 @@ endif
 
 check-bun:
 	@command -v bun >/dev/null 2>&1 || { \
+		echo ""; \
 		echo "Error: Bun is not installed."; \
-		echo "Install from: https://bun.sh/"; \
+		echo "   Install it from: https://bun.sh/"; \
+		echo "   Quick install: curl -fsSL https://bun.sh/install | bash"; \
+		echo ""; \
 		exit 1; \
 	}
 
+# Initialize submodule if not already initialized (does not change branch if already present)
 update-submodule:
-	@echo "Updating eXeLearning submodule..."
-	git submodule update --init --remote exelearning
-	cd exelearning && git checkout release/3.1-embedable-version-refactor
-	@echo "Submodule updated to release/3.1-embedable-version-refactor"
+	@if [ ! -f exelearning/package.json ]; then \
+		echo "Initializing eXeLearning submodule..."; \
+		git submodule update --init exelearning; \
+		echo "Submodule initialized."; \
+	else \
+		echo "Submodule already initialized, skipping update (use 'make force-update-submodule' to force)."; \
+	fi
 
+# Force update submodule to the configured branch
+force-update-submodule:
+	@echo "Force updating eXeLearning submodule..."
+	git submodule update --init --remote exelearning
+	@echo "Submodule updated."
+
+EDITOR_OUTPUT_DIR := $(CURDIR)/dist/static
+
+# Build static version of eXeLearning editor
 build-editor: check-bun update-submodule
 	@echo "Building eXeLearning static editor..."
-	cd exelearning && bun install && bun run build:static
-	@echo "Copying static build to dist/static..."
-	rm -rf dist/static
-	mkdir -p dist
-	cp -r exelearning/dist/static dist/static
-	@echo "Static editor built successfully at dist/static/"
+	rm -rf $(EDITOR_OUTPUT_DIR)
+	cd exelearning && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) bun run build:static
+	@# Create symlink for Omeka asset serving
+	@rm -f asset/static
+	@ln -s ../dist/static asset/static
+	@echo ""
+	@echo "============================================"
+	@echo "  Static editor built at dist/static/"
+	@echo "============================================"
 
+# Build editor without updating submodule (for CI/CD)
 build-editor-no-update: check-bun
-	@echo "Building eXeLearning static editor (no submodule update)..."
-	cd exelearning && bun install && bun run build:static
-	rm -rf dist/static
-	mkdir -p dist
-	cp -r exelearning/dist/static dist/static
-	@echo "Static editor built successfully at dist/static/"
+	@echo "Building eXeLearning static editor (without submodule update)..."
+	rm -rf $(EDITOR_OUTPUT_DIR)
+	cd exelearning && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) bun run build:static
+	@# Create symlink for Omeka asset serving
+	@rm -f asset/static
+	@ln -s ../dist/static asset/static
+	@echo "Static editor built at dist/static/"
 
 clean-editor:
-	@echo "Cleaning editor build artifacts..."
 	rm -rf dist/static
+	rm -f asset/static
 	rm -rf exelearning/dist/static
 	rm -rf exelearning/node_modules
-	@echo "Editor artifacts cleaned"
 
 # ============================================================================
 # Docker Management
@@ -143,10 +163,11 @@ package:
 	@echo "Updating version to $(VERSION) in module.ini..."
 	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"$(VERSION)"/' config/module.ini
 	@echo "Creating ZIP archive: ExeLearning-$(VERSION).zip..."
-	composer archive --format=zip --file="ExeLearning-$(VERSION)-raw"
-	@echo "Repacking into proper structure..."
-	mkdir -p tmpzip/ExeLearning && unzip -q ExeLearning-$(VERSION)-raw.zip -d tmpzip/ExeLearning && \
-	cd tmpzip && zip -qr ../ExeLearning-$(VERSION).zip ExeLearning && cd .. && rm -rf tmpzip ExeLearning-$(VERSION)-raw.zip
+	rm -rf /tmp/exelearning-omeka-package
+	mkdir -p /tmp/exelearning-omeka-package/ExeLearning
+	rsync -av --exclude-from=.distignore ./ /tmp/exelearning-omeka-package/ExeLearning/
+	cd /tmp/exelearning-omeka-package && zip -qr "$(CURDIR)/ExeLearning-$(VERSION).zip" ExeLearning
+	rm -rf /tmp/exelearning-omeka-package
 	@echo "Restoring version to 0.0.0 in module.ini..."
 	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"0.0.0"/' config/module.ini
 	@echo "Package created: ExeLearning-$(VERSION).zip"
@@ -220,9 +241,10 @@ help:
 	@echo "========================="
 	@echo ""
 	@echo "eXeLearning Editor:"
-	@echo "  update-submodule       - Update eXeLearning git submodule"
 	@echo "  build-editor           - Build static editor from submodule"
 	@echo "  build-editor-no-update - Build without updating submodule (for CI/CD)"
+	@echo "  update-submodule       - Initialize submodule if not present (safe)"
+	@echo "  force-update-submodule - Force update submodule to configured branch"
 	@echo "  clean-editor           - Remove editor build artifacts"
 	@echo ""
 	@echo "Docker management:"
