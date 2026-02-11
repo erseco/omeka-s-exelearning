@@ -8,5 +8,9 @@ test/.phpunit.cache/
 themes/
 
 # Built static editor - download from releases or build with `make build-editor`
-dist/static/
+dist/
 asset/static
+
+# Local editor checkout fetched during build
+exelearning/
+.env

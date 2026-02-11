@@ -122,8 +122,23 @@ Then open [http://localhost:8080](http://localhost:8080).
 * `make lint` - Run PHP_CodeSniffer
 * `make fix` - Auto-fix coding style issues
 * `make package VERSION=1.2.3` - Build a `.zip` release
+* `make build-editor` - Fetch and build editor from `main` (shallow)
 
 Run `make help` for a full list.
+
+### Editor Source Selection
+
+By default, `make build-editor` fetches `https://github.com/exelearning/exelearning` from `main` using a shallow checkout.
+You can force a specific tag or branch at build time:
+
+```bash
+EXELEARNING_EDITOR_REF=vX.Y.Z EXELEARNING_EDITOR_REF_TYPE=tag make build-editor
+# or
+EXELEARNING_EDITOR_REF=my-feature EXELEARNING_EDITOR_REF_TYPE=branch make build-editor
+```
+
+The release workflow also supports manual runs (`workflow_dispatch`) and automatic package generation when pushing a tag.
+
 
 ## Security
 

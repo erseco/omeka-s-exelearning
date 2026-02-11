@@ -21,7 +21,7 @@ else
 endif
 
 .PHONY: help check-docker check-bun up upd down pull build lint fix shell clean \
-        update-submodule force-update-submodule build-editor build-editor-no-update clean-editor \
+        fetch-editor-source build-editor build-editor-no-update clean-editor \
         package generate-pot update-po check-untranslated compile-mo i18n test test-coverage
 
 # ============================================================================
@@ -38,29 +38,60 @@ check-bun:
 		exit 1; \
 	}
 
-# Initialize submodule if not already initialized (does not change branch if already present)
-update-submodule:
-	@if [ ! -f exelearning/package.json ]; then \
-		echo "Initializing eXeLearning submodule..."; \
-		git submodule update --init exelearning; \
-		echo "Submodule initialized."; \
-	else \
-		echo "Submodule already initialized, skipping update (use 'make force-update-submodule' to force)."; \
-	fi
-
-# Force update submodule to the configured branch
-force-update-submodule:
-	@echo "Force updating eXeLearning submodule..."
-	git submodule update --init --remote exelearning
-	@echo "Submodule updated."
-
+EDITOR_SUBMODULE_PATH := exelearning
 EDITOR_OUTPUT_DIR := $(CURDIR)/dist/static
+EDITOR_REPO_DEFAULT := https://github.com/exelearning/exelearning.git
+EDITOR_REF_DEFAULT := main
+
+# Fetch editor source code from remote repository (branch/tag, shallow clone)
+fetch-editor-source:
+	@set -e; \
+	get_env() { \
+		if [ -f .env ]; then \
+			grep -E "^$$1=" .env | tail -n1 | cut -d '=' -f2-; \
+		fi; \
+	}; \
+	REPO_URL="$${EXELEARNING_EDITOR_REPO_URL:-$$(get_env EXELEARNING_EDITOR_REPO_URL)}"; \
+	REF="$${EXELEARNING_EDITOR_REF:-$$(get_env EXELEARNING_EDITOR_REF)}"; \
+	REF_TYPE="$${EXELEARNING_EDITOR_REF_TYPE:-$$(get_env EXELEARNING_EDITOR_REF_TYPE)}"; \
+	if [ -z "$$REPO_URL" ]; then REPO_URL="$(EDITOR_REPO_DEFAULT)"; fi; \
+	if [ -z "$$REF" ]; then REF="$${EXELEARNING_EDITOR_DEFAULT_BRANCH:-$$(get_env EXELEARNING_EDITOR_DEFAULT_BRANCH)}"; fi; \
+	if [ -z "$$REF" ]; then REF="$(EDITOR_REF_DEFAULT)"; fi; \
+	if [ -z "$$REF_TYPE" ]; then REF_TYPE="auto"; fi; \
+	echo "Fetching editor source from $$REPO_URL (ref=$$REF, type=$$REF_TYPE)"; \
+	rm -rf $(EDITOR_SUBMODULE_PATH); \
+	git init -q $(EDITOR_SUBMODULE_PATH); \
+	git -C $(EDITOR_SUBMODULE_PATH) remote add origin "$$REPO_URL"; \
+	case "$$REF_TYPE" in \
+		tag) \
+			git -C $(EDITOR_SUBMODULE_PATH) fetch --depth 1 origin "refs/tags/$$REF:refs/tags/$$REF"; \
+			git -C $(EDITOR_SUBMODULE_PATH) checkout -q "tags/$$REF"; \
+			;; \
+		branch) \
+			git -C $(EDITOR_SUBMODULE_PATH) fetch --depth 1 origin "$$REF"; \
+			git -C $(EDITOR_SUBMODULE_PATH) checkout -q FETCH_HEAD; \
+			;; \
+		auto) \
+			if git -C $(EDITOR_SUBMODULE_PATH) fetch --depth 1 origin "refs/tags/$$REF:refs/tags/$$REF" > /dev/null 2>&1; then \
+				echo "Resolved $$REF as tag"; \
+				git -C $(EDITOR_SUBMODULE_PATH) checkout -q "tags/$$REF"; \
+			else \
+				echo "Resolved $$REF as branch"; \
+				git -C $(EDITOR_SUBMODULE_PATH) fetch --depth 1 origin "$$REF"; \
+				git -C $(EDITOR_SUBMODULE_PATH) checkout -q FETCH_HEAD; \
+			fi; \
+			;; \
+		*) \
+			echo "Error: EXELEARNING_EDITOR_REF_TYPE must be one of: auto, branch, tag"; \
+			exit 1; \
+			;; \
+	esac
 
 # Build static version of eXeLearning editor
-build-editor: check-bun update-submodule
+build-editor: check-bun fetch-editor-source
 	@echo "Building eXeLearning static editor..."
 	rm -rf $(EDITOR_OUTPUT_DIR)
-	cd exelearning && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) bun run build:static
+	cd $(EDITOR_SUBMODULE_PATH) && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) bun run build:static
 	@# Create symlink for Omeka asset serving
 	@rm -f asset/static
 	@ln -s ../dist/static asset/static
@@ -69,21 +100,14 @@ build-editor: check-bun update-submodule
 	@echo "  Static editor built at dist/static/"
 	@echo "============================================"
 
-# Build editor without updating submodule (for CI/CD)
-build-editor-no-update: check-bun
-	@echo "Building eXeLearning static editor (without submodule update)..."
-	rm -rf $(EDITOR_OUTPUT_DIR)
-	cd exelearning && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) bun run build:static
-	@# Create symlink for Omeka asset serving
-	@rm -f asset/static
-	@ln -s ../dist/static asset/static
-	@echo "Static editor built at dist/static/"
+# Backward-compatible alias
+build-editor-no-update: build-editor
 
 clean-editor:
 	rm -rf dist/static
 	rm -f asset/static
-	rm -rf exelearning/dist/static
-	rm -rf exelearning/node_modules
+	rm -rf $(EDITOR_SUBMODULE_PATH)/dist/static
+	rm -rf $(EDITOR_SUBMODULE_PATH)/node_modules
 
 # ============================================================================
 # Docker Management
@@ -241,11 +265,10 @@ help:
 	@echo "========================="
 	@echo ""
 	@echo "eXeLearning Editor:"
-	@echo "  build-editor           - Build static editor from submodule"
-	@echo "  build-editor-no-update - Build without updating submodule (for CI/CD)"
-	@echo "  update-submodule       - Initialize submodule if not present (safe)"
-	@echo "  force-update-submodule - Force update submodule to configured branch"
+	@echo "  build-editor           - Build static editor from configured repo/ref"
+	@echo "  build-editor-no-update - Alias of build-editor"
 	@echo "  clean-editor           - Remove editor build artifacts"
+	@echo "  fetch-editor-source    - Download editor source from configured repo/ref"
 	@echo ""
 	@echo "Docker management:"
 	@echo "  up                     - Start Docker containers in interactive mode"
