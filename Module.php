@@ -207,6 +207,9 @@ class Module extends AbstractModule
 
             // Use secure content proxy instead of direct file access
             $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+            if (!$this->isTeacherModeVisible($media)) {
+                $previewUrl .= '?teacher_mode_visible=0';
+            }
 
             echo $view->partial('exelearning/public/item-show', [
                 'media' => $media,
@@ -256,6 +259,9 @@ class Module extends AbstractModule
 
         // Use secure content proxy instead of direct file access
             $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+            if (!$this->isTeacherModeVisible($media)) {
+                $previewUrl .= '?teacher_mode_visible=0';
+            }
 
         echo $view->partial('exelearning/admin/media-show', [
             'media' => $media,
@@ -296,6 +302,99 @@ class Module extends AbstractModule
             'document.documentElement.setAttribute("data-exelearning-thumbnail", "' . $thumbnailUrl . '");' .
             'window.exelearningItemIds = ' . json_encode($exeItemIds) . ';'
         );
+
+        // Robust injection of Teacher Mode setting into admin media edit form.
+        $label = $view->escapeJs($view->translate('Show Teacher Mode toggler'));
+        $visibleLabel = $view->escapeJs($view->translate('Visible in inserted resource'));
+        $help = $view->escapeJs($view->translate('If disabled, the Teacher Mode toggler is hidden in the embedded eXeLearning content.'));
+        $apiBase = $basePath . '/api/exelearning';
+        $view->headScript()->appendScript(<<<JS
+(function() {
+    function isExeFilename(filename) {
+        if (!filename) {
+            return false;
+        }
+        var lower = String(filename).toLowerCase();
+        return lower.endsWith('.elpx') || lower.endsWith('.zip');
+    }
+
+    function getMediaIdFromPath() {
+        var match = window.location.pathname.match(/\\/admin\\/media\\/(\\d+)/);
+        return match ? match[1] : null;
+    }
+
+    function injectField(checked) {
+        if (document.getElementById('exelearning-teacher-mode-field')) {
+            return;
+        }
+        var form = document.querySelector('form#edit-media');
+        if (!form) {
+            return;
+        }
+
+        var target = document.querySelector('#advanced-settings') ||
+            document.querySelector('#resource-values') ||
+            form;
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'field';
+        wrapper.id = 'exelearning-teacher-mode-field';
+        wrapper.innerHTML =
+            '<div class="field-meta">' +
+                '<label for="exelearning-teacher-mode-visible">{$label}</label>' +
+            '</div>' +
+            '<div class="inputs">' +
+                '<input type="hidden" name="exelearning_teacher_mode_visible" value="0">' +
+                '<label>' +
+                    '<input type="checkbox" id="exelearning-teacher-mode-visible" name="exelearning_teacher_mode_visible" value="1" ' + (checked ? 'checked' : '') + '> {$visibleLabel}' +
+                '</label>' +
+                '<p class="field-description">{$help}</p>' +
+            '</div>';
+
+        target.appendChild(wrapper);
+    }
+
+    function init() {
+        var form = document.querySelector('form#edit-media');
+        if (!form) {
+            return;
+        }
+
+        var mediaId = getMediaIdFromPath();
+        if (!mediaId) {
+            return;
+        }
+
+        fetch('{$apiBase}/elp-data/' + mediaId, {credentials: 'same-origin'})
+            .then(function(resp) {
+                if (!resp.ok) {
+                    throw new Error('data endpoint unavailable');
+                }
+                return resp.json();
+            })
+            .then(function(data) {
+                if (!data || !data.success || !isExeFilename(data.filename)) {
+                    return;
+                }
+                injectField(data.teacherModeVisible !== false);
+            })
+            .catch(function() {
+                // Fallback: use current page title as heuristic.
+                var title = document.querySelector('h1 .title');
+                if (title && isExeFilename(title.textContent || '')) {
+                    injectField(true);
+                }
+            });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+JS
+);
     }
 
     /**
@@ -354,6 +453,25 @@ class Module extends AbstractModule
         if (in_array($extension, ['elpx', 'zip'])) {
             if (method_exists($entity, 'setRenderer')) {
                 $entity->setRenderer('exelearning_renderer');
+            }
+
+            // Persist custom eXeLearning media settings from admin edit form.
+            $request = $event->getParam('request');
+            if ($request && method_exists($request, 'getContent')) {
+                $content = $request->getContent();
+                if (is_array($content) && array_key_exists('exelearning_teacher_mode_visible', $content)) {
+                    $rawValue = $content['exelearning_teacher_mode_visible'];
+                    if (is_array($rawValue)) {
+                        $rawValue = end($rawValue);
+                    }
+                    $visible = !in_array((string) $rawValue, ['0', 'false', 'no', 'off', ''], true);
+
+                    if (method_exists($entity, 'getData') && method_exists($entity, 'setData')) {
+                        $data = $entity->getData() ?? [];
+                        $data['exelearning_teacher_mode_visible'] = $visible ? '1' : '0';
+                        $entity->setData($data);
+                    }
+                }
             }
         }
     }
@@ -492,6 +610,20 @@ class Module extends AbstractModule
      * @param mixed $media
      * @return bool
      */
+    /**
+     * Check if teacher mode toggler should be visible for a media resource.
+     */
+    protected function isTeacherModeVisible($media): bool
+    {
+        $data = $media->mediaData();
+        if (!isset($data['exelearning_teacher_mode_visible'])) {
+            return true;
+        }
+
+        $value = $data['exelearning_teacher_mode_visible'];
+        return !in_array((string) $value, ['0', 'false', 'no'], true);
+    }
+
     protected function isExeLearningFile($media): bool
     {
         $filename = $media->filename();

@@ -77,6 +77,8 @@ $this->headScript()->appendFile($this->assetUrl('js/exelearning-editor.js', 'Exe
             <span class="o-icon-download" aria-hidden="true"></span>
             <?= $this->translate('Download .elpx') ?>
         </a>
+
+        <div style="margin-left:auto;"></div>
         <?php if ($canEdit): ?>
         <button type="button" class="edit-btn"
                 onclick="ExeLearningEditor.open(<?= $mediaId ?>, '<?= $this->escapeJs($editUrl) ?>')">

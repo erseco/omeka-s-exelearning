@@ -68,6 +68,9 @@ class ExeLearningRenderer implements RendererInterface
 
         // Build secure preview URL via proxy controller
         $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+        if (!$this->isTeacherModeVisible($media)) {
+            $previewUrl .= '?teacher_mode_visible=0';
+        }
 
         // Load assets
         $view->headLink()->appendStylesheet(
@@ -191,6 +194,20 @@ class ExeLearningRenderer implements RendererInterface
      * @param MediaRepresentation $media
      * @return bool
      */
+    /**
+     * Determine whether teacher mode toggler should be visible.
+     */
+    protected function isTeacherModeVisible(MediaRepresentation $media): bool
+    {
+        $data = $media->mediaData();
+        if (!isset($data['exelearning_teacher_mode_visible'])) {
+            return true;
+        }
+
+        $value = $data['exelearning_teacher_mode_visible'];
+        return !in_array((string) $value, ['0', 'false', 'no'], true);
+    }
+
     protected function isExeLearningFile(MediaRepresentation $media): bool
     {
         $filename = $media->filename();

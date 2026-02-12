@@ -103,7 +103,10 @@ class ContentController extends AbstractActionController
         // Get file info
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $mimeType = $this->mimeTypes[$extension] ?? 'application/octet-stream';
-        $fileSize = filesize($fullPath);
+
+        $teacherModeVisibleParam = strtolower((string) $this->params()->fromQuery('teacher_mode_visible', '1'));
+        $teacherModeVisible = !in_array($teacherModeVisibleParam, ['0', 'false', 'no'], true);
+
 
         // Create response
         $response = new HttpResponse();
@@ -112,7 +115,6 @@ class ContentController extends AbstractActionController
         // Set content headers
         $headers = $response->getHeaders();
         $headers->addHeaderLine('Content-Type', $mimeType);
-        $headers->addHeaderLine('Content-Length', $fileSize);
 
         // Security headers
         $this->addSecurityHeaders($headers, $mimeType);
@@ -122,6 +124,15 @@ class ContentController extends AbstractActionController
 
         // Read and return file content
         $content = file_get_contents($fullPath);
+        if ($content === false) {
+            return $this->notFound('File not found');
+        }
+
+        if (strpos($mimeType, 'text/html') !== false && !$teacherModeVisible) {
+            $content = $this->injectTeacherModeCss($content);
+        }
+
+        $headers->addHeaderLine('Content-Length', (string) strlen($content));
         $response->setContent($content);
 
         return $response;
@@ -180,6 +191,23 @@ class ContentController extends AbstractActionController
      * @param string $path
      * @return string|null Sanitized path or null if invalid
      */
+
+
+    /**
+     * Inject CSS to hide teacher mode toggler inside eXeLearning content.
+     */
+    protected function injectTeacherModeCss(string $html): string
+    {
+        $css = '#teacher-mode-toggler-wrapper { visibility: hidden !important; }';
+        $styleTag = '<style id="exelearning-hide-teacher-mode">' . $css . '</style>';
+
+        if (stripos($html, '</head>') !== false) {
+            return preg_replace('/<\/head>/i', $styleTag . '</head>', $html, 1) ?? $html;
+        }
+
+        return $styleTag . $html;
+    }
+
     protected function sanitizePath(string $path): ?string
     {
         // Decode URL encoding

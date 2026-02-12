@@ -161,6 +161,55 @@ class ApiController extends AbstractActionController
             'filename' => $media->filename(),
             'hasPreview' => $hasPreview,
             'previewUrl' => $previewUrl,
+            'teacherModeVisible' => $this->elpService->isTeacherModeVisible($media),
         ]);
     }
+
+    /**
+     * Persist teacher mode visibility setting for a media item.
+     *
+     * POST /api/exelearning/teacher-mode/:id
+     */
+    public function setTeacherModeAction(): JsonModel
+    {
+        $request = $this->getRequest();
+
+        if (!$request->isPost()) {
+            return $this->errorResponse(405, 'Method not allowed');
+        }
+
+        if (!$this->identity()) {
+            return $this->errorResponse(401, 'Unauthorized');
+        }
+
+        $mediaId = $this->params('id');
+        if (!$mediaId) {
+            return $this->errorResponse(400, 'Media ID required');
+        }
+
+        $media = $this->getMediaOrFail((int) $mediaId);
+        if (!$media) {
+            return $this->errorResponse(404, 'Media not found');
+        }
+
+        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
+        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+            return $this->errorResponse(403, 'Forbidden');
+        }
+
+        $rawValue = $request->getPost('teacher_mode_visible', '1');
+        $visible = !in_array(strtolower((string) $rawValue), ['0', 'false', 'no'], true);
+
+        try {
+            $this->elpService->setTeacherModeVisible($media, $visible);
+            return new JsonModel([
+                'success' => true,
+                'media_id' => (int) $mediaId,
+                'teacherModeVisible' => $visible,
+            ]);
+        } catch (\Exception $e) {
+            return $this->errorResponse(500, 'Update failed: ' . $e->getMessage());
+        }
+    }
 }
+

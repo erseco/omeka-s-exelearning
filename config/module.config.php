@@ -106,6 +106,18 @@ return [
                             ],
                         ],
                     ],
+                    'teacher-mode' => [
+                        'type' => Segment::class,
+                        'options' => [
+                            'route' => '/teacher-mode/:id',
+                            'constraints' => [
+                                'id' => '\d+',
+                            ],
+                            'defaults' => [
+                                'action' => 'setTeacherMode',
+                            ],
+                        ],
+                    ],
                 ],
             ],
             'admin' => [

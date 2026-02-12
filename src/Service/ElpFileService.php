@@ -245,6 +245,36 @@ class ElpFileService
     }
 
     /**
+     * Check whether teacher mode toggler should be visible for this media.
+     *
+     * @param MediaRepresentation $media
+     * @return bool
+     */
+    public function isTeacherModeVisible(MediaRepresentation $media): bool
+    {
+        $data = $media->mediaData();
+        if (!isset($data['exelearning_teacher_mode_visible'])) {
+            return true;
+        }
+
+        $value = $data['exelearning_teacher_mode_visible'];
+        return !in_array((string) $value, ['0', 'false', 'no'], true);
+    }
+
+    /**
+     * Persist teacher mode visibility setting for this media.
+     *
+     * @param MediaRepresentation $media
+     * @param bool $visible
+     */
+    public function setTeacherModeVisible(MediaRepresentation $media, bool $visible): void
+    {
+        $this->updateMediaData($media, [
+            'exelearning_teacher_mode_visible' => $visible ? '1' : '0',
+        ]);
+    }
+
+    /**
      * Get the preview URL for a media item.
      *
      * @param MediaRepresentation $media
