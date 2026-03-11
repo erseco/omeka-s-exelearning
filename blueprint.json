@@ -27,11 +27,32 @@
       }
     }
   ],
+  "itemSets": [
+    {
+      "title": "eXeLearning Samples",
+      "description": "eXeLearning content ready to test the module in Omeka S Playground."
+    }
+  ],
+  "items": [
+    {
+      "title": "Really Simple Test Project",
+      "description": "Minimal eXeLearning project to validate viewing and editing of .elpx files.",
+      "creator": "eXeLearning",
+      "itemSets": ["eXeLearning Samples"],
+      "media": [
+        {
+          "type": "url",
+          "url": "https://raw.githubusercontent.com/exelearning/omeka-s-exelearning/refs/heads/main/data/fixtures/really-simple-test-project.elpx",
+          "title": "really-simple-test-project.elpx"
+        }
+      ]
+    }
+  ],
   "site": {
     "title": "eXeLearning Demo",
     "slug": "demo",
     "theme": "default",
-    "summary": "Instalacion minima para probar el modulo ExeLearning en Omeka S Playground.",
+    "summary": "Minimal setup to test the eXeLearning module in Omeka S Playground.",
     "isPublic": true,
     "setAsDefault": true
   }
