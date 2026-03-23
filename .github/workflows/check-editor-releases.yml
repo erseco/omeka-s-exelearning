@@ -102,7 +102,8 @@ jobs:
 
             ---
 
-            <a href="${{ steps.playground.outputs.url }}"><img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try in Omeka-S Playground" width="220"></a>
+            <a href="${{ steps.playground.outputs.url }}"><img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try eXeLearning in your browser" width="220"></a><br>
+            <small><a href="${{ steps.playground.outputs.url }}">Try in your browser</a></small>
           files: ExeLearning-${{ steps.version.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
