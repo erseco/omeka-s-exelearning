@@ -130,6 +130,15 @@ return [
                             ],
                         ],
                     ],
+                    'install-editor-status' => [
+                        'type' => Literal::class,
+                        'options' => [
+                            'route' => '/install-editor-status',
+                            'defaults' => [
+                                'action' => 'installEditorStatus',
+                            ],
+                        ],
+                    ],
                 ],
             ],
             'admin' => [
@@ -157,6 +166,17 @@ return [
                                 '__NAMESPACE__' => 'ExeLearning\Controller',
                                 'controller' => 'Editor',
                                 'action' => 'installEditor',
+                            ],
+                        ],
+                    ],
+                    'exelearning-install-status' => [
+                        'type' => Literal::class,
+                        'options' => [
+                            'route' => '/exelearning/install-editor-status',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'ExeLearning\Controller',
+                                'controller' => 'Editor',
+                                'action' => 'installEditorStatus',
                             ],
                         ],
                     ],

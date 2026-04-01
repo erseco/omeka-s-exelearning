@@ -280,22 +280,6 @@ class ApiController extends AbstractActionController
 
     /**
      * Install or update the static eXeLearning editor.
-     *
-     * Supports three modes:
-     * - Mode A (download_url): JS provides a CORS-friendly URL (e.g. proxy).
-     *   PHP downloads it directly. Best for Playground (PHP-WASM) where the
-     *   proxy adds CORS headers so PHP's file_get_contents works via browser fetch.
-     * - Mode B (file upload): Browser downloaded the ZIP and uploads it here.
-     * - Mode C (server download): No file/URL; PHP downloads from GitHub directly.
-     *   Works in normal Omeka S deployments.
-     *
-     * POST /api/exelearning/install-editor
-     * - csrf: CSRF token
-     * - download_url (optional): CORS-friendly URL to download ZIP from
-     * - version (optional): version string
-     * - file (optional): uploaded ZIP
-     *
-     * @return JsonModel
      */
     public function installEditorAction()
     {
@@ -333,134 +317,110 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(403, 'Forbidden');
         }
 
-        $installer = new StaticEditorInstaller();
+        $settings = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Settings');
+        $status = StaticEditorInstaller::getStoredInstallStatus($settings);
+        if ($status['running']) {
+            return $this->errorResponse(409, 'An editor installation is already in progress.');
+        }
 
-        // Query params (used by chunked upload and raw body modes)
-        $action = method_exists($request, 'getQuery')
-            ? $request->getQuery('action', '')
-            : '';
-        $qVersion = method_exists($request, 'getQuery')
-            ? $request->getQuery('version', 'unknown')
-            : 'unknown';
-        $uploadId = method_exists($request, 'getQuery')
-            ? $request->getQuery('upload_id', '')
-            : '';
+        $startedAt = time();
+        StaticEditorInstaller::storeInstallStatus($settings, 'checking', 'Checking latest version...', [
+            'started_at' => $startedAt,
+            'target_version' => '',
+            'success' => false,
+            'error' => '',
+        ]);
 
-        $downloadUrl = $request->getPost('download_url');
-        $files = $request->getFiles();
-        $hasUpload = !empty($files['file']) && $files['file']['error'] === UPLOAD_ERR_OK;
+        $installer = (new StaticEditorInstaller())->setStatusCallback(
+            function (string $phase, string $message, array $extra = []) use ($settings, $startedAt): void {
+                $extra['started_at'] = $startedAt;
+                StaticEditorInstaller::storeInstallStatus($settings, $phase, $message, $extra);
+            }
+        );
 
         try {
-            // --- Chunked upload (for PHP-WASM where large single requests fail) ---
-            if ($action === 'chunk') {
-                return $this->handleChunk($request, $uploadId);
-            }
-            if ($action === 'finalize') {
-                return $this->handleFinalize($installer, $uploadId, $qVersion);
-            }
+            $result = $installer->installLatestEditor();
 
-            if ($downloadUrl) {
-                // PHP downloads from a CORS-friendly URL (e.g. proxy)
-                $version = $request->getPost('version', 'unknown');
-                $tmpFile = $installer->downloadAsset($downloadUrl);
-                try {
-                    $result = $installer->installFromFile($tmpFile, $version);
-                } finally {
-                    @unlink($tmpFile);
-                }
-            } elseif ($hasUpload) {
-                // Browser uploaded the ZIP via multipart
-                $version = $request->getPost('version', 'unknown');
-                $result = $installer->installFromFile($files['file']['tmp_name'], $version);
-            } else {
-                // Server downloads from GitHub directly
-                $result = $installer->installLatestEditor();
-            }
-
-            // Save settings
-            $settings = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Settings');
             $settings->set(StaticEditorInstaller::SETTING_VERSION, $result['version']);
             $settings->set(StaticEditorInstaller::SETTING_INSTALLED_AT, $result['installed_at']);
+
+            StaticEditorInstaller::storeInstallStatus($settings, 'done', sprintf(
+                'eXeLearning editor v%s installed successfully.',
+                $result['version']
+            ), [
+                'started_at' => $startedAt,
+                'target_version' => $result['version'],
+                'success' => true,
+                'error' => '',
+            ]);
 
             return new JsonModel([
                 'success' => true,
                 'message' => sprintf('eXeLearning editor v%s installed successfully.', $result['version']),
                 'version' => $result['version'],
                 'installed_at' => $result['installed_at'],
+                'status' => $this->buildInstallStatusPayload($settings),
             ]);
         } catch (\Throwable $e) {
+            StaticEditorInstaller::storeInstallStatus($settings, 'error', $e->getMessage(), [
+                'started_at' => $startedAt,
+                'target_version' => '',
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
             return $this->errorResponse(500, $e->getMessage());
         }
     }
 
     /**
-     * Receive a chunk of the editor ZIP and append to a temp file.
-     *
-     * @codeCoverageIgnore
+     * Return the current editor installation status.
      */
-    private function handleChunk($request, string $uploadId): JsonModel
+    public function installEditorStatusAction(): JsonModel
     {
-        if (!$uploadId || !preg_match('/^[a-zA-Z0-9]{8,32}$/', $uploadId)) {
-            return $this->errorResponse(400, 'Invalid upload_id');
+        if (!$this->identity()) {
+            return $this->errorResponse(401, 'Unauthorized');
         }
 
-        $tmpFile = sys_get_temp_dir() . '/exelearning-chunk-' . $uploadId;
-        $body = $request->getContent();
-        if (empty($body)) {
-            return $this->errorResponse(400, 'Empty chunk');
-        }
-
-        // Append chunk to temp file
-        $written = file_put_contents($tmpFile, $body, FILE_APPEND);
-        if ($written === false) {
-            return $this->errorResponse(500, 'Failed to write chunk');
-        }
-
-        $totalSize = file_exists($tmpFile) ? filesize($tmpFile) : 0;
-
+        $settings = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Settings');
         return new JsonModel([
             'success' => true,
-            'received' => $written,
-            'total_size' => $totalSize,
+            'status' => $this->buildInstallStatusPayload($settings),
         ]);
     }
 
     /**
-     * Finalize a chunked upload: validate, extract, and install.
-     *
-     * @codeCoverageIgnore
+     * Build the install status payload used by the admin UI.
      */
-    private function handleFinalize(
-        StaticEditorInstaller $installer,
-        string $uploadId,
-        string $version
-    ): JsonModel {
-        if (!$uploadId || !preg_match('/^[a-zA-Z0-9]{8,32}$/', $uploadId)) {
-            return $this->errorResponse(400, 'Invalid upload_id');
+    private function buildInstallStatusPayload($settings): array
+    {
+        $stored = StaticEditorInstaller::getStoredInstallStatus($settings);
+        $isInstalled = StaticEditorInstaller::isEditorInstalled();
+        $version = (string) $settings->get(StaticEditorInstaller::SETTING_VERSION, '');
+        $installedAt = (string) $settings->get(StaticEditorInstaller::SETTING_INSTALLED_AT, '');
+
+        if ($stored['stale']) {
+            $stored['phase'] = 'error';
+            $stored['message'] = 'The previous installation appears to have stalled. Please try again.';
+            $stored['error'] = $stored['message'];
+            $stored['running'] = false;
         }
 
-        $tmpFile = sys_get_temp_dir() . '/exelearning-chunk-' . $uploadId;
-        if (!file_exists($tmpFile)) {
-            return $this->errorResponse(400, 'No chunks received for this upload_id');
-        }
-
-        try {
-            $result = $installer->installFromFile($tmpFile, $version);
-
-            $settings = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Settings');
-            $settings->set(StaticEditorInstaller::SETTING_VERSION, $result['version']);
-            $settings->set(StaticEditorInstaller::SETTING_INSTALLED_AT, $result['installed_at']);
-
-            return new JsonModel([
-                'success' => true,
-                'message' => sprintf('eXeLearning editor v%s installed successfully.', $result['version']),
-                'version' => $result['version'],
-                'installed_at' => $result['installed_at'],
-            ]);
-        } catch (\Throwable $e) {
-            return $this->errorResponse(500, $e->getMessage());
-        } finally {
-            @unlink($tmpFile);
-        }
+        return [
+            'phase' => $stored['phase'],
+            'message' => $stored['message'],
+            'target_version' => $stored['target_version'],
+            'running' => $stored['running'],
+            'finished' => !$stored['running'] && in_array($stored['phase'], ['done', 'error', 'idle'], true),
+            'success' => $stored['success'],
+            'error' => $stored['error'],
+            'is_installed' => $isInstalled,
+            'installed_version' => $version,
+            'installed_at' => $installedAt,
+            'button_label' => $isInstalled ? 'Update to Latest Version' : 'Download & Install Editor',
+            'button_class' => $isInstalled ? 'button' : 'button active',
+            'description' => $isInstalled
+                ? ''
+                : 'The embedded eXeLearning editor is not installed. You can download and install the latest version automatically from GitHub.',
+        ];
     }
 }

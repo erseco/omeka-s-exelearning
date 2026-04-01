@@ -195,7 +195,7 @@ class StaticEditorInstallerTest extends TestCase
 
     public function testConstantsAreDefined(): void
     {
-        $this->assertNotEmpty(StaticEditorInstaller::GITHUB_API_URL);
+        $this->assertNotEmpty(StaticEditorInstaller::RELEASES_FEED_URL);
         $this->assertNotEmpty(StaticEditorInstaller::ASSET_PREFIX);
         $this->assertEquals('exelearning_editor_installed_version', StaticEditorInstaller::SETTING_VERSION);
         $this->assertEquals('exelearning_editor_installed_at', StaticEditorInstaller::SETTING_INSTALLED_AT);
@@ -237,83 +237,33 @@ class StaticEditorInstallerTest extends TestCase
         $this->assertTrue(method_exists($this->installer, 'installLatestEditor'));
     }
 
-    // =========================================================================
-    // installFromFile tests
-    // =========================================================================
-
-    public function testInstallFromFileMethodExists(): void
+    public function testExtractVersionFromFeedParsesTagLink(): void
     {
-        $this->assertTrue(method_exists($this->installer, 'installFromFile'));
+        $feed = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Release v4.0.0-beta3</title>
+    <link rel="alternate" type="text/html" href="https://github.com/exelearning/exelearning/releases/tag/v4.0.0-beta3"/>
+  </entry>
+</feed>
+XML;
+
+        $this->assertEquals('4.0.0-beta3', $this->installer->extractVersionFromFeed($feed));
     }
 
-    public function testInstallFromFileRejectsInvalidZip(): void
+    public function testExtractVersionFromFeedRejectsUnexpectedEntry(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        file_put_contents($tmp, 'not a zip');
+        $feed = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry><title>draft release</title></entry>
+</feed>
+XML;
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('not a valid ZIP');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
-    }
-
-    public function testInstallFromFileRejectsZipMissingIndex(): void
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('readme.txt', 'hello');
-        $zip->close();
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Could not find index.html');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
-    }
-
-    public function testInstallFromFileRejectsZipMissingAssets(): void
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('index.html', '<html></html>');
-        $zip->close();
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing expected asset directories');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
-    }
-
-    public function testInstallFromFileSucceeds(): void
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('index.html', '<html><body>Editor</body></html>');
-        $zip->addEmptyDir('app');
-        $zip->close();
-
-        $result = $this->installer->installFromFile($tmp, '4.0.0-test');
-
-        $this->assertEquals('4.0.0-test', $result['version']);
-        $this->assertArrayHasKey('installed_at', $result);
-
-        // Clean up installed files
-        $editorPath = StaticEditorInstaller::getEditorPath();
-        if (is_dir($editorPath)) {
-            $this->installer->cleanupDirectory($editorPath);
-        }
-        @unlink($tmp);
+        $this->expectExceptionMessage('Unexpected release tag format');
+        $this->installer->extractVersionFromFeed($feed);
     }
 
     // =========================================================================

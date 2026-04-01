@@ -740,17 +740,19 @@ JS
         $html .= '<span id="exelearning-status-icon">';
         if ($isInstalled) {
             $html .= '<span style="color: #46b450;">&#10003;</span> ';
-            $html .= $renderer->escapeHtml($translate('Installed')); // @translate
+            $html .= '<span id="exelearning-status-text">' . $renderer->escapeHtml($translate('Installed')) . '</span>'; // @translate
             if ($version) {
-                $html .= ' &mdash; v' . $renderer->escapeHtml($version);
+                $html .= ' &mdash; v<span id="exelearning-installed-version">' . $renderer->escapeHtml($version) . '</span>';
             }
             if ($installedAt) {
                 $html .= ' (' . $renderer->escapeHtml($translate('installed on'));  // @translate
-                $html .= ' ' . $renderer->escapeHtml($installedAt) . ')';
+                $html .= ' <span id="exelearning-installed-at">' . $renderer->escapeHtml($installedAt) . '</span>)';
             }
         } else {
             $html .= '<span style="color: #dc3232;">&#10007;</span> ';
-            $html .= $renderer->escapeHtml($translate('Not installed')); // @translate
+            $html .= '<span id="exelearning-status-text">' . $renderer->escapeHtml($translate('Not installed')) . '</span>'; // @translate
+            $html .= '<span id="exelearning-installed-version" style="display:none;"></span>';
+            $html .= '<span id="exelearning-installed-at" style="display:none;"></span>';
         }
         $html .= '</span>';
         $html .= '</div></div>';
@@ -758,12 +760,14 @@ JS
         // Install/update button + status area
         $html .= '<div class="field"><div class="field-meta"></div><div class="inputs">';
         if (!$isInstalled) {
-            $html .= '<p>';
+            $html .= '<p id="exelearning-status-description">';
             $html .= $renderer->escapeHtml($translate( // @translate
                 'The embedded eXeLearning editor is not installed.'
                 . ' You can download and install the latest version automatically from GitHub.'
             ));
             $html .= '</p>';
+        } else {
+            $html .= '<p id="exelearning-status-description" style="display:none;"></p>';
         }
 
         $buttonLabel = $isInstalled
@@ -803,22 +807,32 @@ JS
 
         // Configuration for the external installer JS
         $installUrl = $renderer->serverUrl() . $renderer->basePath() . '/admin/exelearning/install-editor';
+        $statusUrl = $renderer->serverUrl() . $renderer->basePath() . '/admin/exelearning/install-editor-status';
         $jsConfig = [
             'installUrl' => $installUrl,
+            'statusUrl' => $statusUrl,
             'csrfToken' => $csrfValue,
-            'githubApiUrl' => StaticEditorInstaller::GITHUB_API_URL,
-            'jsdelivrApiUrl' => StaticEditorInstaller::JSDELIVR_API_URL,
-            'assetPrefix' => StaticEditorInstaller::ASSET_PREFIX,
             'strings' => [
                 'pleaseWait' => $translate('Please wait...'), // @translate
-                'discovering' => $translate('Checking latest version...'), // @translate
+                'checking' => $translate('Checking latest version...'), // @translate
                 'installing' => $translate('Installing editor...'), // @translate
                 'downloading' => $translate('Downloading editor...'), // @translate
-                'downloadingProgress' => $translate('Downloading... {downloaded} MB / {total} MB'), // @translate
+                'extracting' => $translate('Extracting editor package...'), // @translate
+                'validating' => $translate('Validating editor files...'), // @translate
                 'error' => $translate('Installation failed.'), // @translate
                 'networkError' => $translate('Network error. Please check your connection and try again.'), // @translate
-                'downloadFailed' => $translate('Could not download the editor. All download sources failed.'), // @translate
                 'tryAgain' => $translate('Try Again'), // @translate
+                'working' => $translate('Still working...'), // @translate
+                'timeout' => $translate('The installation is taking longer than expected. Checking status...'), // @translate
+                'stalled' => $translate('The previous installation appears to have stalled. Please try again.'), // @translate
+                'installed' => $translate('Installed'), // @translate
+                'notInstalled' => $translate('Not installed'), // @translate
+                'installedOn' => $translate('installed on'), // @translate
+                'notInstalledDescription' => $translate(
+                    'The embedded eXeLearning editor is not installed.'
+                    . ' You can download and install the latest version automatically from GitHub.'
+                ), // @translate
+                'successDefault' => $translate('Editor installed successfully.'), // @translate
             ],
         ];
 
