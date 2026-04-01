@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -24,15 +25,17 @@ jobs:
             const marker = '<!-- omeka-s-playground-preview -->';
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const headOwner = context.payload.pull_request.head.repo.owner.login;
+            const headRepo = context.payload.pull_request.head.repo.name;
             const headRef = context.payload.pull_request.head.ref;
             const prNumber = context.payload.pull_request.number;
 
             // Read the root blueprint and replace the module URL with the PR branch ZIP
             const blueprint = JSON.parse(fs.readFileSync('blueprint.json', 'utf8'));
-            const prZipUrl = `https://github.com/${owner}/${repo}/archive/refs/heads/${headRef}.zip`;
+            const prZipUrl = `https://github.com/${headOwner}/${headRepo}/archive/refs/heads/${headRef}.zip`;
             if (blueprint.modules) {
               for (const mod of blueprint.modules) {
-                if (mod.source && mod.source.url && mod.source.url.includes(`${owner}/${repo}`)) {
+                if (mod.source && mod.source.url && mod.source.url.includes('/omeka-s-exelearning/archive/refs/heads/main.zip')) {
                   mod.source.url = prZipUrl;
                 }
               }

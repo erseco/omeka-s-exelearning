@@ -195,10 +195,87 @@ class StaticEditorInstallerTest extends TestCase
 
     public function testConstantsAreDefined(): void
     {
-        $this->assertNotEmpty(StaticEditorInstaller::GITHUB_API_URL);
+        $this->assertNotEmpty(StaticEditorInstaller::RELEASES_FEED_URL);
         $this->assertNotEmpty(StaticEditorInstaller::ASSET_PREFIX);
         $this->assertEquals('exelearning_editor_installed_version', StaticEditorInstaller::SETTING_VERSION);
         $this->assertEquals('exelearning_editor_installed_at', StaticEditorInstaller::SETTING_INSTALLED_AT);
+    }
+
+    public function testStoreAndReadInstallStatus(): void
+    {
+        $settings = new class {
+            private array $store = [];
+            public function set(string $key, $value): void { $this->store[$key] = $value; }
+            public function get(string $key, $default = null) { return $this->store[$key] ?? $default; }
+        };
+
+        StaticEditorInstaller::storeInstallStatus($settings, 'downloading', 'Downloading editor...', [
+            'target_version' => '4.0.0-beta3',
+            'started_at' => time(),
+            'success' => false,
+            'error' => '',
+        ]);
+
+        $status = StaticEditorInstaller::getStoredInstallStatus($settings);
+
+        $this->assertSame('downloading', $status['phase']);
+        $this->assertSame('Downloading editor...', $status['message']);
+        $this->assertSame('4.0.0-beta3', $status['target_version']);
+        $this->assertTrue($status['running']);
+        $this->assertFalse($status['stale']);
+    }
+
+    public function testStoredInstallStatusDetectsStaleLock(): void
+    {
+        $settings = new class {
+            private array $store = [];
+            public function set(string $key, $value): void { $this->store[$key] = $value; }
+            public function get(string $key, $default = null) { return $this->store[$key] ?? $default; }
+        };
+
+        StaticEditorInstaller::storeInstallStatus($settings, 'installing', 'Installing editor...', [
+            'started_at' => time() - (StaticEditorInstaller::INSTALL_LOCK_TTL + 5),
+            'success' => false,
+            'error' => '',
+        ]);
+
+        $status = StaticEditorInstaller::getStoredInstallStatus($settings);
+
+        $this->assertFalse($status['running']);
+        $this->assertTrue($status['stale']);
+    }
+
+    public function testResetInstallStatusReturnsIdle(): void
+    {
+        $settings = new class {
+            private array $store = [];
+            public function set(string $key, $value): void { $this->store[$key] = $value; }
+            public function get(string $key, $default = null) { return $this->store[$key] ?? $default; }
+        };
+
+        StaticEditorInstaller::storeInstallStatus($settings, 'error', 'boom', [
+            'target_version' => '4.0.0',
+            'started_at' => 123,
+            'success' => true,
+            'error' => 'boom',
+        ]);
+        StaticEditorInstaller::resetInstallStatus($settings);
+
+        $status = StaticEditorInstaller::getStoredInstallStatus($settings);
+
+        $this->assertSame('idle', $status['phase']);
+        $this->assertSame('', $status['message']);
+        $this->assertSame('', $status['target_version']);
+        $this->assertFalse($status['success']);
+        $this->assertFalse($status['running']);
+    }
+
+    public function testIsFreshLockAndRunningPhaseHelpers(): void
+    {
+        $this->assertTrue(StaticEditorInstaller::isFreshLock(time()));
+        $this->assertFalse(StaticEditorInstaller::isFreshLock(time() - (StaticEditorInstaller::INSTALL_LOCK_TTL + 5)));
+        $this->assertTrue(StaticEditorInstaller::isRunningPhase('checking'));
+        $this->assertFalse(StaticEditorInstaller::isRunningPhase('done'));
     }
 
     // =========================================================================
@@ -237,83 +314,53 @@ class StaticEditorInstallerTest extends TestCase
         $this->assertTrue(method_exists($this->installer, 'installLatestEditor'));
     }
 
-    // =========================================================================
-    // installFromFile tests
-    // =========================================================================
-
-    public function testInstallFromFileMethodExists(): void
+    public function testExtractVersionFromFeedParsesTagLink(): void
     {
-        $this->assertTrue(method_exists($this->installer, 'installFromFile'));
+        $feed = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Release v4.0.0-beta3</title>
+    <link rel="alternate" type="text/html" href="https://github.com/exelearning/exelearning/releases/tag/v4.0.0-beta3"/>
+  </entry>
+</feed>
+XML;
+
+        $this->assertEquals('4.0.0-beta3', $this->installer->extractVersionFromFeed($feed));
     }
 
-    public function testInstallFromFileRejectsInvalidZip(): void
+    public function testExtractVersionFromFeedRejectsUnexpectedEntry(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        file_put_contents($tmp, 'not a zip');
+        $feed = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry><title>draft release</title></entry>
+</feed>
+XML;
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('not a valid ZIP');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
+        $this->expectExceptionMessage('Unexpected release tag format');
+        $this->installer->extractVersionFromFeed($feed);
     }
 
-    public function testInstallFromFileRejectsZipMissingIndex(): void
+    public function testStatusCallbackReceivesReportedPhases(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('readme.txt', 'hello');
-        $zip->close();
+        $seen = [];
+        $installer = (new StaticEditorInstaller())->setStatusCallback(
+            function (string $phase, string $message, array $extra = []) use (&$seen): void {
+                $seen[] = [$phase, $message, $extra];
+            }
+        );
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Could not find index.html');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
-    }
+        $ref = new \ReflectionClass($installer);
+        $method = $ref->getMethod('reportStatus');
+        $method->setAccessible(true);
+        $method->invoke($installer, 'checking', 'Checking latest version...', ['target_version' => '4.0.0']);
 
-    public function testInstallFromFileRejectsZipMissingAssets(): void
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('index.html', '<html></html>');
-        $zip->close();
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing expected asset directories');
-        try {
-            $this->installer->installFromFile($tmp, '1.0.0');
-        } finally {
-            @unlink($tmp);
-        }
-    }
-
-    public function testInstallFromFileSucceeds(): void
-    {
-        $tmp = tempnam(sys_get_temp_dir(), 'test-');
-        $zip = new \ZipArchive();
-        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString('index.html', '<html><body>Editor</body></html>');
-        $zip->addEmptyDir('app');
-        $zip->close();
-
-        $result = $this->installer->installFromFile($tmp, '4.0.0-test');
-
-        $this->assertEquals('4.0.0-test', $result['version']);
-        $this->assertArrayHasKey('installed_at', $result);
-
-        // Clean up installed files
-        $editorPath = StaticEditorInstaller::getEditorPath();
-        if (is_dir($editorPath)) {
-            $this->installer->cleanupDirectory($editorPath);
-        }
-        @unlink($tmp);
+        $this->assertCount(1, $seen);
+        $this->assertSame('checking', $seen[0][0]);
+        $this->assertSame('Checking latest version...', $seen[0][1]);
+        $this->assertSame('4.0.0', $seen[0][2]['target_version']);
     }
 
     // =========================================================================

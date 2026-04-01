@@ -10,14 +10,8 @@ namespace ExeLearning\Service;
  */
 class StaticEditorInstaller
 {
-    /** GitHub API URL for latest release. */
-    const GITHUB_API_URL = 'https://api.github.com/repos/exelearning/exelearning/releases/latest';
-
-    /** jsDelivr API URL (CORS-friendly fallback for PHP-WASM / Playground). */
-    const JSDELIVR_API_URL = 'https://data.jsdelivr.com/v1/packages/gh/exelearning/exelearning/resolved?specifier=latest';
-
-    /** jsDelivr CDN base for downloading repo files. */
-    const JSDELIVR_CDN_BASE = 'https://cdn.jsdelivr.net/gh/exelearning/exelearning';
+    /** GitHub Atom feed for latest releases. */
+    const RELEASES_FEED_URL = 'https://github.com/exelearning/exelearning/releases.atom';
 
     /** Asset filename prefix. */
     const ASSET_PREFIX = 'exelearning-static-v';
@@ -28,17 +22,29 @@ class StaticEditorInstaller
     /** Settings key for installation timestamp. */
     const SETTING_INSTALLED_AT = 'exelearning_editor_installed_at';
 
-    /**
-     * Route a URL through the CORS proxy when running in Omeka S Playground.
-     * In normal Omeka installations the URL is returned unchanged.
-     */
-    private static function proxyUrl(string $url): string
-    {
-        if (defined('OMEKA_PLAYGROUND') && defined('OMEKA_PLAYGROUND_PROXY_URL') && OMEKA_PLAYGROUND_PROXY_URL !== '') {
-            return rtrim(OMEKA_PLAYGROUND_PROXY_URL, '/') . '?url=' . urlencode($url);
-        }
-        return $url;
-    }
+    /** Settings key for installation phase. */
+    const SETTING_INSTALL_PHASE = 'exelearning_editor_install_phase';
+
+    /** Settings key for installation message. */
+    const SETTING_INSTALL_MESSAGE = 'exelearning_editor_install_message';
+
+    /** Settings key for target version. */
+    const SETTING_INSTALL_TARGET_VERSION = 'exelearning_editor_install_target_version';
+
+    /** Settings key for installation started at timestamp. */
+    const SETTING_INSTALL_STARTED_AT = 'exelearning_editor_install_started_at';
+
+    /** Settings key for installation success flag. */
+    const SETTING_INSTALL_SUCCESS = 'exelearning_editor_install_success';
+
+    /** Settings key for final installation error. */
+    const SETTING_INSTALL_ERROR = 'exelearning_editor_install_error';
+
+    /** Lock TTL in seconds. */
+    const INSTALL_LOCK_TTL = 600;
+
+    /** @var callable|null */
+    private $statusCallback;
 
     /**
      * Check if the static editor is installed locally.
@@ -57,6 +63,95 @@ class StaticEditorInstaller
     }
 
     /**
+     * Register a callback for installation phase updates.
+     *
+     * The callback receives: phase, message, extra payload array.
+     */
+    public function setStatusCallback(?callable $callback): self
+    {
+        $this->statusCallback = $callback;
+        return $this;
+    }
+
+    /**
+     * Return the persisted install status.
+     */
+    public static function getStoredInstallStatus($settings): array
+    {
+        $phase = (string) $settings->get(self::SETTING_INSTALL_PHASE, 'idle');
+        $startedAt = (int) $settings->get(self::SETTING_INSTALL_STARTED_AT, 0);
+
+        return [
+            'phase' => $phase,
+            'message' => (string) $settings->get(self::SETTING_INSTALL_MESSAGE, ''),
+            'target_version' => (string) $settings->get(self::SETTING_INSTALL_TARGET_VERSION, ''),
+            'started_at' => $startedAt,
+            'success' => (bool) $settings->get(self::SETTING_INSTALL_SUCCESS, false),
+            'error' => (string) $settings->get(self::SETTING_INSTALL_ERROR, ''),
+            'running' => self::isRunningPhase($phase) && self::isFreshLock($startedAt),
+            'stale' => self::isRunningPhase($phase) && !self::isFreshLock($startedAt),
+        ];
+    }
+
+    /**
+     * Persist install status.
+     */
+    public static function storeInstallStatus(
+        $settings,
+        string $phase,
+        string $message = '',
+        array $extra = []
+    ): void {
+        $settings->set(self::SETTING_INSTALL_PHASE, $phase);
+        $settings->set(self::SETTING_INSTALL_MESSAGE, $message);
+
+        if (array_key_exists('target_version', $extra)) {
+            $settings->set(self::SETTING_INSTALL_TARGET_VERSION, (string) $extra['target_version']);
+        }
+
+        if (array_key_exists('started_at', $extra)) {
+            $settings->set(self::SETTING_INSTALL_STARTED_AT, (int) $extra['started_at']);
+        }
+
+        if (array_key_exists('success', $extra)) {
+            $settings->set(self::SETTING_INSTALL_SUCCESS, (bool) $extra['success']);
+        }
+
+        if (array_key_exists('error', $extra)) {
+            $settings->set(self::SETTING_INSTALL_ERROR, (string) $extra['error']);
+        }
+    }
+
+    /**
+     * Reset install status to idle.
+     */
+    public static function resetInstallStatus($settings): void
+    {
+        self::storeInstallStatus($settings, 'idle', '', [
+            'target_version' => '',
+            'started_at' => 0,
+            'success' => false,
+            'error' => '',
+        ]);
+    }
+
+    /**
+     * Check whether a running install lock is still fresh.
+     */
+    public static function isFreshLock(int $startedAt): bool
+    {
+        return $startedAt > 0 && (time() - $startedAt) < self::INSTALL_LOCK_TTL;
+    }
+
+    /**
+     * Check whether a phase is a running phase.
+     */
+    public static function isRunningPhase(string $phase): bool
+    {
+        return in_array($phase, ['checking', 'downloading', 'extracting', 'validating', 'installing'], true);
+    }
+
+    /**
      * Install the latest static editor from GitHub Releases.
      *
      * @return array{version: string, installed_at: string}
@@ -66,12 +161,15 @@ class StaticEditorInstaller
      */
     public function installLatestEditor(): array
     {
+        $this->reportStatus('checking', 'Checking latest version...'); // @translate
         $version = $this->discoverLatestVersion();
-        $assetUrl = $this->getAssetUrl($version);
 
+        $this->reportStatus('downloading', 'Downloading editor...', ['target_version' => $version]); // @translate
+        $assetUrl = $this->getAssetUrl($version);
         $tmpFile = $this->downloadAsset($assetUrl);
 
         try {
+            $this->reportStatus('extracting', 'Extracting editor package...', ['target_version' => $version]); // @translate
             $this->validateZip($tmpFile);
             $tmpDir = $this->extractZip($tmpFile);
         } finally {
@@ -79,8 +177,11 @@ class StaticEditorInstaller
         }
 
         try {
+            $this->reportStatus('validating', 'Validating editor files...', ['target_version' => $version]); // @translate
             $sourceDir = $this->normalizeExtraction($tmpDir);
             $this->validateEditorContents($sourceDir);
+
+            $this->reportStatus('installing', 'Installing editor...', ['target_version' => $version]); // @translate
             $this->safeInstall($sourceDir);
         } finally {
             $this->cleanupDirectory($tmpDir);
@@ -93,34 +194,7 @@ class StaticEditorInstaller
     }
 
     /**
-     * Install the editor from a local ZIP file (e.g. uploaded by the browser).
-     *
-     * @param string $zipPath Path to the ZIP file
-     * @param string $version Version string
-     * @return array{version: string, installed_at: string}
-     * @throws \RuntimeException on failure
-     */
-    public function installFromFile(string $zipPath, string $version): array
-    {
-        $this->validateZip($zipPath);
-        $tmpDir = $this->extractZip($zipPath);
-
-        try {
-            $sourceDir = $this->normalizeExtraction($tmpDir);
-            $this->validateEditorContents($sourceDir);
-            $this->safeInstall($sourceDir);
-        } finally {
-            $this->cleanupDirectory($tmpDir);
-        }
-
-        return [
-            'version' => $version,
-            'installed_at' => date('Y-m-d H:i:s'),
-        ];
-    }
-
-    /**
-     * Discover the latest release version from GitHub.
+     * Discover the latest release version from the GitHub Atom feed.
      *
      * @throws \RuntimeException
      *
@@ -132,49 +206,46 @@ class StaticEditorInstaller
             'http' => [
                 'method' => 'GET',
                 'header' => implode("\r\n", [
-                    'Accept: application/vnd.github.v3+json',
+                    'Accept: application/atom+xml,application/xml,text/xml',
                     'User-Agent: OmekaS-ExeLearning-Module',
                 ]),
                 'timeout' => 30,
             ],
         ]);
 
-        $response = @file_get_contents(self::proxyUrl(self::GITHUB_API_URL), false, $context);
-        if ($response === false) {
-            // Try jsDelivr as fallback (works in PHP-WASM / Playground environments where direct GitHub access fails due to CORS).
-            $response = @file_get_contents(self::proxyUrl(self::JSDELIVR_API_URL), false, $context);
-        }
+        $response = @file_get_contents(self::RELEASES_FEED_URL, false, $context);
         if ($response === false) {
             throw new \RuntimeException(
-                'Could not connect to GitHub. Please check your internet connection or install the editor from a release package.' // @translate
+                'Could not connect to GitHub. Please check your internet connection or install the module from a release package.' // @translate
             );
         }
 
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
+        return $this->extractVersionFromFeed($response);
+    }
+
+    /**
+     * Extract the latest version from an Atom feed.
+     *
+     * @throws \RuntimeException
+     */
+    public function extractVersionFromFeed(string $feed): string
+    {
+        if (!preg_match('/<entry\\b[^>]*>(.*?)<\\/entry>/si', $feed, $entryMatch)) {
             throw new \RuntimeException(
                 'Could not parse the latest release information from GitHub.' // @translate
             );
         }
 
-        // GitHub API returns { tag_name: "v4.0.0" }
-        // jsDelivr API returns { version: "4.0.0-beta2" }
-        $tagName = $data['tag_name'] ?? $data['version'] ?? '';
-        if (empty($tagName)) {
+        $entry = $entryMatch[1];
+        $candidate = $this->extractVersionCandidateFromEntry($entry);
+
+        if ($candidate === '') {
             throw new \RuntimeException(
                 'Could not parse the latest release information from GitHub.' // @translate
             );
         }
 
-        $version = ltrim($tagName, 'v');
-
-        if (!preg_match('/^\d+\.\d+/', $version)) {
-            throw new \RuntimeException(
-                sprintf('Unexpected release tag format: %s', $data['tag_name']) // @translate
-            );
-        }
-
-        return $version;
+        return $this->normalizeVersionCandidate($candidate);
     }
 
     /**
@@ -211,21 +282,11 @@ class StaticEditorInstaller
             ],
         ]);
 
-        $content = @file_get_contents(self::proxyUrl($url), false, $context);
-
-        // Fallback: try jsDelivr CDN mirror for CORS-restricted environments (PHP-WASM).
-        if ($content === false && preg_match('#/download/v([^/]+)/#', $url, $m)) {
-            $tag = 'v' . $m[1];
-            $jsdelivrUrl = self::JSDELIVR_CDN_BASE . '@' . $tag . '/dist/static.zip';
-            $content = @file_get_contents(self::proxyUrl($jsdelivrUrl), false, $context);
-        }
-
+        $content = @file_get_contents($url, false, $context);
         if ($content === false) {
             $this->cleanupFile($tmpFile);
             throw new \RuntimeException(
-                'Failed to download the editor package.'
-                . ' This may happen in browser-based environments.'
-                . ' Please install the module from a release package that includes the editor.' // @translate
+                'Failed to download the editor package.' // @translate
             );
         }
 
@@ -301,7 +362,6 @@ class StaticEditorInstaller
             }
         }
 
-        // Check one more level deep.
         foreach ($entries as $entry) {
             $entryPath = $tmpDir . '/' . $entry;
             if (is_dir($entryPath)) {
@@ -377,9 +437,7 @@ class StaticEditorInstaller
             }
         }
 
-        // Try rename first (fast, same-filesystem). Fall back to copy.
         $installed = @rename($sourceDir, $targetDir);
-
         if (!$installed) {
             $installed = $this->recursiveCopy($sourceDir, $targetDir);
         }
@@ -453,8 +511,6 @@ class StaticEditorInstaller
      */
     private function cleanupFile(string $file): void
     {
-        // Check before unlink: in Playground (PHP-WASM), the file may have been
-        // cleaned up by a concurrent process between download and installation.
         if (file_exists($file)) {
             @unlink($file);
         }
@@ -482,5 +538,49 @@ class StaticEditorInstaller
         }
 
         @rmdir($dir);
+    }
+
+    /**
+     * Report an installation phase update.
+     */
+    private function reportStatus(string $phase, string $message, array $extra = []): void
+    {
+        if ($this->statusCallback) {
+            ($this->statusCallback)($phase, $message, $extra);
+        }
+    }
+
+    /**
+     * Extract a version candidate from an Atom entry.
+     */
+    private function extractVersionCandidateFromEntry(string $entry): string
+    {
+        if (preg_match('/<link\\b[^>]*href="([^"]*\\/tag\\/v?([^"\\/]+))"[^>]*>/i', $entry, $matches)) {
+            return html_entity_decode($matches[2], ENT_QUOTES | ENT_HTML5);
+        }
+
+        if (preg_match('/<title\\b[^>]*>(.*?)<\\/title>/si', $entry, $matches)) {
+            return trim(html_entity_decode(strip_tags($matches[1]), ENT_QUOTES | ENT_HTML5));
+        }
+
+        return '';
+    }
+
+    /**
+     * Normalize a raw version candidate.
+     *
+     * @throws \RuntimeException
+     */
+    private function normalizeVersionCandidate(string $candidate): string
+    {
+        $version = trim(ltrim($candidate, 'v'));
+
+        if (!preg_match('/^\\d+\\.\\d+/', $version)) {
+            throw new \RuntimeException(
+                sprintf('Unexpected release tag format: %s', $candidate) // @translate
+            );
+        }
+
+        return $version;
     }
 }
