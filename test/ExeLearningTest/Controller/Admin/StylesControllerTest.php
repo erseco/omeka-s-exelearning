@@ -79,7 +79,45 @@ class StylesControllerTest extends TestCase
         $this->assertEmpty($summary['installed']);
         $this->assertCount(2, $summary['errors']);
         foreach ($summary['errors'] as $msg) {
-            $this->assertStringStartsWith('Upload failed:', $msg);
+            $this->assertStringStartsWith('Upload failed for', $msg);
+        }
+    }
+
+    public function testProcessUploadsHandlesTransposedListShape(): void
+    {
+        $zip1 = $this->makeZip('alpha', 'a{}');
+        $zip2 = $this->makeZip('beta', 'b{}');
+        $summary = $this->invokePrivate('processUploads', [[
+            ['tmp_name' => $zip1, 'name' => 'alpha.zip', 'error' => UPLOAD_ERR_OK],
+            ['tmp_name' => $zip2, 'name' => 'beta.zip',  'error' => UPLOAD_ERR_OK],
+        ]]);
+        $this->assertCount(2, $summary['installed']);
+        $this->assertEmpty($summary['errors']);
+        @unlink($zip1);
+        @unlink($zip2);
+    }
+
+    public function testUploadErrorMessageCoversEveryPhpErrCode(): void
+    {
+        $reflection = new \ReflectionMethod(
+            \ExeLearning\Controller\Admin\StylesController::class,
+            'uploadErrorMessage'
+        );
+        $reflection->setAccessible(true);
+        foreach ([
+            UPLOAD_ERR_OK,
+            UPLOAD_ERR_INI_SIZE,
+            UPLOAD_ERR_FORM_SIZE,
+            UPLOAD_ERR_PARTIAL,
+            UPLOAD_ERR_NO_FILE,
+            UPLOAD_ERR_NO_TMP_DIR,
+            UPLOAD_ERR_CANT_WRITE,
+            UPLOAD_ERR_EXTENSION,
+            999, // unknown code
+        ] as $code) {
+            $msg = $reflection->invoke(null, $code);
+            $this->assertIsString($msg);
+            $this->assertNotEmpty($msg);
         }
     }
 
