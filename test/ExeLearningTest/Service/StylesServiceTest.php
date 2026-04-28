@@ -183,10 +183,67 @@ class StylesServiceTest extends TestCase
             'https://example.test/exelearning/styles/seen',
             $override['uploaded'][0]['url']
         );
+        // Even icon-less styles must expose the field so the editor's
+        // Theme constructor doesn't fall back to its empty default.
+        $this->assertArrayHasKey('icons', $override['uploaded'][0]);
+        $this->assertSame([], $override['uploaded'][0]['icons']);
 
         $this->svc->setUploadedEnabled('seen', false);
         $override = $this->svc->buildThemeRegistryOverride();
         $this->assertCount(0, $override['uploaded']);
+        @unlink($zip);
+    }
+
+    public function testBuildOverridePublishesIconsFromIconsFolder(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('iconic'),
+            'style.css'  => 'a{}',
+            'icons/activity.png' => 'PNG',
+            'icons/alert.svg' => '<svg/>',
+            'icons/photo.JPG' => 'JPEG',
+            'icons/readme.txt' => 'ignore',
+            'icons/no-extension' => 'ignore',
+        ]);
+        $this->svc->installFromZip($zip);
+
+        $override = $this->svc->buildThemeRegistryOverride('https://host');
+        $this->assertCount(1, $override['uploaded']);
+        $entry = $override['uploaded'][0];
+        $this->assertSame('iconic', $entry['id']);
+        $this->assertArrayHasKey('icons', $entry);
+        $this->assertSame(['activity', 'alert', 'photo'], array_keys($entry['icons']));
+        $activity = $entry['icons']['activity'];
+        $this->assertSame('activity', $activity['id']);
+        $this->assertSame('activity', $activity['title']);
+        $this->assertSame('img', $activity['type']);
+        $this->assertSame($entry['url'] . '/icons/activity.png', $activity['value']);
+        @unlink($zip);
+    }
+
+    public function testScanUploadedIconsReturnsEmptyWhenIconsFolderMissing(): void
+    {
+        $this->assertSame(
+            [],
+            $this->svc->scanUploadedIcons('no-such-style', 'http://example.test/styles/no-such-style')
+        );
+    }
+
+    public function testScanUploadedIconsUrlEncodesFilenamesWithSpaces(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('spaced'),
+            'style.css'  => 'a{}',
+            'icons/my activity.png' => 'PNG',
+        ]);
+        $this->svc->installFromZip($zip);
+
+        $icons = $this->svc->scanUploadedIcons('spaced', 'http://example.test/styles/spaced');
+        $this->assertArrayHasKey('my activity', $icons);
+        $this->assertSame(
+            'http://example.test/styles/spaced/icons/my%20activity.png',
+            $icons['my activity']['value']
+        );
         @unlink($zip);
     }
 

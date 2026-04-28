@@ -237,6 +237,7 @@ class StylesService
                 ? array_values(array_map('strval', $meta['css_files']))
                 : ['style.css'];
             $files = $this->listUploadedFiles((string) $slug);
+            $styleUrl = $prefix . $this->getStyleUrlPath((string) $slug);
             $uploaded[] = [
                 'id' => (string) $slug,
                 'name' => (string) $slug,
@@ -247,9 +248,10 @@ class StylesService
                 'author' => (string) ($meta['author'] ?? ''),
                 'license' => (string) ($meta['license'] ?? ''),
                 'type' => 'admin',
-                'url' => $prefix . $this->getStyleUrlPath((string) $slug),
+                'url' => $styleUrl,
                 'cssFiles' => $cssFiles,
                 'files' => $files,
+                'icons' => $this->scanUploadedIcons((string) $slug, $styleUrl),
                 'downloadable' => '0',
                 'valid' => true,
             ];
@@ -622,6 +624,51 @@ class StylesService
             return [];
         }
         sort($out);
+        return $out;
+    }
+
+    /**
+     * Scan an uploaded style's `icons/` subfolder and return the editor-shape
+     * icon map. Mirrors the upstream theme-parser.ts::scanThemeIcons logic so
+     * the iDevice icon picker shows icons shipped with admin-uploaded styles
+     * (built-in themes get scanned by the editor itself; admin-uploaded ones
+     * arrive via themeRegistryOverride and need the icon list pre-built).
+     *
+     * @return array<string, array{id:string,title:string,type:string,value:string}>
+     */
+    public function scanUploadedIcons(string $slug, string $styleUrl): array
+    {
+        $slug = self::normalizeSlug($slug);
+        $dir = $this->getStyleDir($slug) . '/icons';
+        if (!is_dir($dir)) {
+            return [];
+        }
+        $entries = scandir($dir);
+        if ($entries === false) {
+            return [];
+        }
+        $out = [];
+        foreach ($entries as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $name;
+            if (!is_file($path)) {
+                continue;
+            }
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['png', 'svg', 'gif', 'jpg', 'jpeg'], true)) {
+                continue;
+            }
+            $iconId = pathinfo($name, PATHINFO_FILENAME);
+            $out[$iconId] = [
+                'id' => $iconId,
+                'title' => $iconId,
+                'type' => 'img',
+                'value' => rtrim($styleUrl, '/') . '/icons/' . rawurlencode($name),
+            ];
+        }
+        ksort($out);
         return $out;
     }
 
